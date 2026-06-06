@@ -27,7 +27,7 @@ I used the [Lung Cancer Histopathological Images Dataset](https://www.kaggle.com
 Images are organized in folders by class.
 
 🚀 **Try the Streamlit App here:** 
-
+https://lung-cancer-detection-gbnmxwzd8adqbbg27qfwqs.streamlit.app/
 ---
 
 ## ⚡ Training
