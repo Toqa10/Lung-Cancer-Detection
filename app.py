@@ -7,8 +7,6 @@ import os
 from datetime import datetime
 import json
 import random
-from fpdf import FPDF
-import tempfile
 
 st.set_page_config(
     page_title="LungVision AI - Clinical Diagnostic System",
@@ -555,7 +553,6 @@ CLASS_CONFIG = {
         "label": "Adenocarcinoma",
         "short": "ADC",
         "color": "#c0392b",
-        "gradient": "linear-gradient(135deg, #c0392b, #e74c3c)",
         "risk": "high",
         "risk_label": "HIGH RISK",
         "stage": "Stage II - III",
@@ -573,7 +570,6 @@ CLASS_CONFIG = {
         "label": "Benign Tissue",
         "short": "BNT",
         "color": "#2c7a4d",
-        "gradient": "linear-gradient(135deg, #2c7a4d, #27ae60)",
         "risk": "low",
         "risk_label": "LOW RISK",
         "stage": "No malignancy detected",
@@ -591,7 +587,6 @@ CLASS_CONFIG = {
         "label": "Squamous Cell Carcinoma",
         "short": "SCC",
         "color": "#e67e22",
-        "gradient": "linear-gradient(135deg, #e67e22, #f39c12)",
         "risk": "moderate",
         "risk_label": "MODERATE RISK",
         "stage": "Stage I - II",
@@ -609,9 +604,11 @@ CLASS_CONFIG = {
 
 # Generate images
 def generate_healthy_reference():
+    """Generate healthy lung tissue reference image"""
     img = Image.new('RGB', (400, 400), color=(245, 250, 252))
     draw = ImageDraw.Draw(img)
     
+    # Regular organized pattern for healthy tissue
     for i in range(0, 400, 35):
         for j in range(0, 400, 35):
             color = (180, 210, 220)
@@ -625,6 +622,7 @@ def generate_healthy_reference():
     return img
 
 def generate_abnormal_image(case_type, highlight_regions=True):
+    """Generate abnormal tissue image with highlighted regions"""
     img = Image.new('RGB', (400, 400), color=(250, 245, 248))
     draw = ImageDraw.Draw(img)
     highlight_positions = []
@@ -673,147 +671,317 @@ def generate_abnormal_image(case_type, highlight_regions=True):
     
     return img, highlighted_img, highlight_positions
 
-# PDF Report Generator
-class PDFReport(FPDF):
-    def header(self):
-        # Logo placeholder
-        self.set_font('helvetica', 'B', 10)
-        self.set_text_color(44, 62, 66)
-        self.cell(0, 10, 'LungVision AI Clinical Report', 0, 1, 'C')
-        self.set_font('helvetica', '', 8)
-        self.set_text_color(122, 142, 148)
-        self.cell(0, 5, 'Advanced Pulmonary Diagnostic System', 0, 1, 'C')
-        self.ln(5)
+# Function to generate PDF report as HTML (then convert to PDF via browser)
+def generate_html_report(healthy_img, abnormal_img, config, confidence, predictions):
+    """Generate HTML report that can be saved as PDF"""
     
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('helvetica', 'I', 8)
-        self.set_text_color(122, 142, 148)
-        self.cell(0, 10, f'Page {self.page_no()} - For Clinical Use Only', 0, 0, 'C')
-
-def create_pdf_report(healthy_img, abnormal_img, config, confidence, predictions):
-    pdf = PDFReport()
-    pdf.add_page()
+    # Convert images to base64
+    healthy_buffer = io.BytesIO()
+    healthy_img.save(healthy_buffer, format='PNG')
+    healthy_base64 = base64.b64encode(healthy_buffer.getvalue()).decode()
     
-    # Title
-    pdf.set_font('helvetica', 'B', 16)
-    pdf.set_text_color(44, 62, 66)
-    pdf.cell(0, 10, 'LUNG PATHOLOGY REPORT', 0, 1, 'C')
-    pdf.set_font('helvetica', '', 10)
-    pdf.set_text_color(122, 142, 148)
-    pdf.cell(0, 6, f'Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1, 'C')
-    pdf.ln(10)
+    abnormal_buffer = io.BytesIO()
+    abnormal_img.save(abnormal_buffer, format='PNG')
+    abnormal_base64 = base64.b64encode(abnormal_buffer.getvalue()).decode()
     
-    # Patient Info Box
-    pdf.set_fill_color(240, 246, 249)
-    pdf.rect(10, pdf.get_y(), 190, 40, 'F')
-    pdf.set_y(pdf.get_y() + 5)
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.set_text_color(44, 62, 66)
-    pdf.cell(50, 8, 'Report ID:', 0, 0)
-    pdf.set_font('helvetica', '', 10)
-    pdf.cell(0, 8, f'LV-{datetime.now().strftime("%Y%m%d%H%M%S")}', 0, 1)
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.cell(50, 8, 'Patient ID:', 0, 0)
-    pdf.set_font('helvetica', '', 10)
-    pdf.cell(0, 8, 'CONFIDENTIAL', 0, 1)
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.cell(50, 8, 'Referring Physician:', 0, 0)
-    pdf.set_font('helvetica', '', 10)
-    pdf.cell(0, 8, 'AI Clinical System', 0, 1)
-    pdf.ln(5)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>LungVision AI Clinical Report</title>
+        <style>
+            @page {{
+                size: A4;
+                margin: 2cm;
+            }}
+            body {{
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                background: white;
+                color: #2c3e42;
+                line-height: 1.5;
+            }}
+            .container {{
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+            }}
+            .header {{
+                text-align: center;
+                padding: 20px;
+                border-bottom: 2px solid #7ec8e0;
+                margin-bottom: 30px;
+            }}
+            .title {{
+                font-size: 24px;
+                font-weight: bold;
+                color: #2c3e42;
+            }}
+            .subtitle {{
+                font-size: 12px;
+                color: #7a8e94;
+                margin-top: 5px;
+            }}
+            .report-id {{
+                font-size: 10px;
+                color: #7a8e94;
+                margin-top: 10px;
+            }}
+            .info-box {{
+                background: #f0f6f9;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 20px 0;
+                border-left: 4px solid #7ec8e0;
+            }}
+            .diagnosis-box {{
+                background: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.1);
+                padding: 20px;
+                border-radius: 12px;
+                margin: 20px 0;
+                text-align: center;
+            }}
+            .diagnosis {{
+                font-size: 28px;
+                font-weight: bold;
+                color: {config['color']};
+                margin: 10px 0;
+            }}
+            .confidence-bar {{
+                width: 100%;
+                height: 8px;
+                background: #e0eef3;
+                border-radius: 4px;
+                margin: 10px 0;
+                overflow: hidden;
+            }}
+            .confidence-fill {{
+                width: {confidence}%;
+                height: 100%;
+                background: {config['color']};
+                border-radius: 4px;
+            }}
+            .comparison-section {{
+                margin: 30px 0;
+            }}
+            .comparison-grid {{
+                display: flex;
+                gap: 20px;
+                margin: 20px 0;
+            }}
+            .comparison-item {{
+                flex: 1;
+                text-align: center;
+                border: 1px solid #e0eef3;
+                border-radius: 12px;
+                padding: 15px;
+                background: #fafdfe;
+            }}
+            .comparison-label {{
+                font-size: 14px;
+                font-weight: bold;
+                margin: 10px 0;
+                padding: 5px 10px;
+                border-radius: 20px;
+                display: inline-block;
+            }}
+            .label-healthy {{
+                background: #d4f0e0;
+                color: #2c7a4d;
+            }}
+            .label-abnormal {{
+                background: #ffe0d4;
+                color: #c0392b;
+            }}
+            .comparison-image {{
+                width: 100%;
+                max-width: 250px;
+                border-radius: 8px;
+                margin: 10px 0;
+            }}
+            .abnormalities-list {{
+                background: #fff8f0;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 20px 0;
+                border-left: 4px solid #e67e22;
+            }}
+            .probability-item {{
+                margin: 10px 0;
+            }}
+            .probability-label {{
+                display: flex;
+                justify-content: space-between;
+                font-size: 12px;
+                margin-bottom: 5px;
+            }}
+            .probability-bar {{
+                width: 100%;
+                height: 6px;
+                background: #e0eef3;
+                border-radius: 3px;
+                overflow: hidden;
+            }}
+            .recommendation-box {{
+                background: #e8f4f8;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 20px 0;
+                border-left: 4px solid #7ec8e0;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #e0eef3;
+                font-size: 9px;
+                color: #7a8e94;
+            }}
+            table {{
+                width: 100%;
+                margin: 15px 0;
+            }}
+            td {{
+                padding: 8px 0;
+                border-bottom: 1px solid #e0eef3;
+            }}
+            .label-cell {{
+                color: #7a8e94;
+                width: 40%;
+            }}
+            .value-cell {{
+                font-weight: 600;
+            }}
+            .risk-tag {{
+                display: inline-block;
+                padding: 3px 10px;
+                border-radius: 15px;
+                font-size: 10px;
+                font-weight: bold;
+            }}
+            .risk-high {{
+                background: #ffe0d4;
+                color: #c0392b;
+            }}
+            .risk-moderate {{
+                background: #fff0d4;
+                color: #e67e22;
+            }}
+            .risk-low {{
+                background: #d4f0e0;
+                color: #2c7a4d;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="title">🔬 LungVision AI</div>
+                <div class="subtitle">Clinical Diagnostic Report | Advanced Pulmonary Pathology System</div>
+                <div class="report-id">Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}</div>
+                <div class="report-id">Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+            </div>
+            
+            <div class="info-box">
+                <strong>Patient Information</strong><br>
+                Name: CONFIDENTIAL<br>
+                    Medical Record #: {datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}<br>
+                    Referring Physician: AI Clinical System<br>
+                    Specimen Type: Lung Tissue Biopsy
+            </div>
+            
+            <div class="diagnosis-box">
+                <div class="diagnosis">{config['label']}</div>
+                <div>Confidence Level: {confidence:.1f}%</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill"></div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <span class="risk-tag risk-{config['risk']}">{config['risk_label']}</span>
+                </div>
+            </div>
+            
+            <div class="comparison-section">
+                <h3>🔬 Cellular Comparison Analysis</h3>
+                <div class="comparison-grid">
+                    <div class="comparison-item">
+                        <div class="comparison-label label-healthy">✅ HEALTHY REFERENCE</div>
+                        <img src="data:image/png;base64,{healthy_base64}" class="comparison-image" alt="Healthy Tissue">
+                        <div style="font-size: 11px; color: #7a8e94; margin-top: 10px;">
+                            Normal alveolar architecture<br>
+                            Regular cell morphology
+                        </div>
+                    </div>
+                    <div class="comparison-item">
+                        <div class="comparison-label label-abnormal">⚠️ PATIENT SAMPLE</div>
+                        <img src="data:image/png;base64,{abnormal_base64}" class="comparison-image" alt="Patient Sample">
+                        <div style="font-size: 11px; color: #7a8e94; margin-top: 10px;">
+                            Abnormal cellular patterns<br>
+                            Highlighted regions indicate abnormalities
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="abnormalities-list">
+                <h4>📋 Detected Abnormalities</h4>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+    """
     
-    # Diagnosis Section
-    pdf.set_font('helvetica', 'B', 12)
-    pdf.set_text_color(44, 62, 66)
-    pdf.cell(0, 10, 'DIAGNOSTIC FINDINGS', 0, 1)
-    pdf.set_draw_color(126, 200, 224)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(5)
+    for ab in config['abnormalities']:
+        html_content += f"<li>{ab}</li>"
     
-    pdf.set_font('helvetica', 'B', 11)
-    pdf.set_text_color(int(config['color'][1:3], 16), int(config['color'][3:5], 16), int(config['color'][5:7], 16))
-    pdf.cell(0, 8, config['label'], 0, 1)
-    pdf.set_font('helvetica', '', 10)
-    pdf.set_text_color(44, 62, 66)
-    pdf.cell(0, 6, f'Confidence Level: {confidence:.1f}%', 0, 1)
-    pdf.cell(0, 6, f'Risk Assessment: {config["risk_label"]}', 0, 1)
-    pdf.cell(0, 6, f'TNM Staging: {config["stage"]}', 0, 1)
-    pdf.ln(5)
-    
-    # Cellular Comparison Section
-    pdf.set_font('helvetica', 'B', 12)
-    pdf.cell(0, 10, 'CELLULAR COMPARISON ANALYSIS', 0, 1)
-    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(5)
-    
-    # Save images temporarily
-    temp_dir = tempfile.mkdtemp()
-    healthy_path = os.path.join(temp_dir, 'healthy.png')
-    abnormal_path = os.path.join(temp_dir, 'abnormal.png')
-    
-    healthy_img_resized = healthy_img.resize((150, 150))
-    abnormal_img_resized = abnormal_img.resize((150, 150))
-    
-    healthy_img_resized.save(healthy_path)
-    abnormal_img_resized.save(abnormal_path)
-    
-    # Add images side by side
-    pdf.image(healthy_path, 30, pdf.get_y(), width=65)
-    pdf.image(abnormal_path, 105, pdf.get_y(), width=65)
-    pdf.set_y(pdf.get_y() + 85)
-    
-    pdf.set_font('helvetica', 'B', 9)
-    pdf.set_text_color(44, 62, 66)
-    pdf.cell(80, 6, 'Healthy Tissue Reference', 0, 0, 'C')
-    pdf.cell(80, 6, 'Patient Sample', 0, 1, 'C')
-    pdf.ln(5)
-    
-    # Abnormalities List
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.cell(0, 8, 'Detected Abnormalities:', 0, 1)
-    pdf.set_font('helvetica', '', 9)
-    for i, ab in enumerate(config['abnormalities'], 1):
-        pdf.cell(10, 6, f'{i}.', 0, 0)
-        pdf.cell(0, 6, ab, 0, 1)
-    pdf.ln(5)
-    
-    # Probability Distribution
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.cell(0, 8, 'Probability Distribution', 0, 1)
+    html_content += f"""
+                </ul>
+            </div>
+            
+            <div class="info-box">
+                <h4>📊 Clinical Staging & Risk Assessment</h4>
+                <table>
+                    <tr><td class="label-cell">TNM Classification:</td><td class="value-cell"><strong>{config['stage']}</strong></td></tr>
+                    <tr><td class="label-cell">Risk Level:</td><td class="value-cell"><span class="risk-tag risk-{config['risk']}">{config['risk_label']}</span></td></tr>
+                    <tr><td class="label-cell">Pathological Finding:</td><td class="value-cell">{config['desc']}</td></tr>
+                </table>
+            </div>
+            
+            <div>
+                <h4>📈 Probability Distribution</h4>
+    """
     
     for i, cls in enumerate(CLASSES):
         c = CLASS_CONFIG[cls]
         prob = float(predictions[0][i]) * 100
-        pdf.set_font('helvetica', '', 9)
-        pdf.cell(60, 6, c['label'], 0, 0)
-        pdf.cell(30, 6, f'{prob:.1f}%', 0, 0)
-        
-        # Draw progress bar manually
-        pdf.set_fill_color(int(c['color'][1:3], 16), int(c['color'][3:5], 16), int(c['color'][5:7], 16))
-        pdf.rect(100, pdf.get_y(), prob, 4, 'F')
-        pdf.ln(8)
-    pdf.ln(5)
+        html_content += f"""
+                <div class="probability-item">
+                    <div class="probability-label">
+                        <span>{c['label']}</span>
+                        <span style="color: {c['color']};">{prob:.1f}%</span>
+                    </div>
+                    <div class="probability-bar">
+                        <div style="width: {prob}%; height: 100%; background: {c['color']};"></div>
+                    </div>
+                </div>
+        """
     
-    # Clinical Recommendation
-    pdf.set_font('helvetica', 'B', 10)
-    pdf.cell(0, 8, 'Clinical Recommendation', 0, 1)
-    pdf.set_font('helvetica', '', 9)
-    pdf.multi_cell(0, 6, config['treatment'])
-    pdf.ln(5)
+    html_content += f"""
+            </div>
+            
+            <div class="recommendation-box">
+                <h4>💊 Clinical Recommendation</h4>
+                <p>{config['treatment']}</p>
+            </div>
+            
+            <div class="footer">
+                This report was generated automatically by LungVision AI v3.0<br>
+                For clinical decision support. Must be reviewed by a qualified physician.<br>
+                © 2024 LungVision AI - Advanced Pulmonary Diagnostic System
+            </div>
+        </div>
+    </body>
+    </html>
+    """
     
-    # Footer note
-    pdf.set_font('helvetica', 'I', 8)
-    pdf.set_text_color(122, 142, 148)
-    pdf.cell(0, 6, 'This report was generated by LungVision AI v3.0', 0, 1, 'C')
-    pdf.cell(0, 6, 'For clinical decision support. Must be reviewed by a qualified physician.', 0, 1, 'C')
-    
-    # Cleanup temp files
-    os.remove(healthy_path)
-    os.remove(abnormal_path)
-    os.rmdir(temp_dir)
-    
-    return pdf.output(dest='S').encode('latin1')
+    return html_content
 
 # Initialize session state
 if 'comparison_active' not in st.session_state:
@@ -854,8 +1022,7 @@ with col1:
     col_s1, col_s2, col_s3 = st.columns(3)
     
     with col_s1:
-        st.markdown('<button class="sample-btn" onclick="">🔬 Adenocarcinoma</button>', unsafe_allow_html=True)
-        if st.button("Adenocarcinoma", key="adc", use_container_width=True):
+        if st.button("🔬 Adenocarcinoma", key="adc", use_container_width=True):
             healthy_img = generate_healthy_reference()
             abnormal_img, abnormal_highlighted, highlights = generate_abnormal_image("adenocarcinoma", True)
             st.session_state.healthy_ref = healthy_img
@@ -866,7 +1033,7 @@ with col1:
             st.rerun()
     
     with col_s2:
-        if st.button("Squamous Cell", key="scc", use_container_width=True):
+        if st.button("🔬 Squamous Cell", key="scc", use_container_width=True):
             healthy_img = generate_healthy_reference()
             abnormal_img, abnormal_highlighted, highlights = generate_abnormal_image("squamous_cell_carcinoma", True)
             st.session_state.healthy_ref = healthy_img
@@ -877,7 +1044,7 @@ with col1:
             st.rerun()
     
     with col_s3:
-        if st.button("Benign Tissue", key="ben", use_container_width=True):
+        if st.button("🔬 Benign Tissue", key="ben", use_container_width=True):
             healthy_img = generate_healthy_reference()
             abnormal_img, abnormal_highlighted, highlights = generate_abnormal_image("benign", True)
             st.session_state.healthy_ref = healthy_img
@@ -1016,20 +1183,20 @@ with col2:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # PDF Download Button
-        if st.button("📑 Generate PDF Clinical Report", use_container_width=True):
-            with st.spinner("Generating PDF report..."):
-                pdf_data = create_pdf_report(
-                    st.session_state.healthy_ref,
-                    st.session_state.abnormal_highlighted,
-                    config,
-                    confidence,
-                    predictions
-                )
-                b64_pdf = base64.b64encode(pdf_data).decode()
-                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf" style="text-decoration: none;"><div class="download-btn">📥 Download PDF Report</div></a>'
-                st.markdown(href, unsafe_allow_html=True)
-                st.success("✅ Report generated successfully!")
+        # Generate and download HTML report (can be saved as PDF via browser)
+        html_report = generate_html_report(
+            st.session_state.healthy_ref,
+            st.session_state.abnormal_highlighted,
+            config,
+            confidence,
+            predictions
+        )
+        
+        b64_html = base64.b64encode(html_report.encode()).decode()
+        href = f'<a href="data:text/html;base64,{b64_html}" download="LungVision_Clinical_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.html" style="text-decoration: none;"><div class="download-btn">📑 Download Clinical Report (HTML/PDF)</div></a>'
+        st.markdown(href, unsafe_allow_html=True)
+        
+        st.info("💡 **Tip:** The report can be saved as PDF by opening the HTML file and using Ctrl+P → 'Save as PDF'")
         
         # Clinical Note
         st.markdown(f"""
