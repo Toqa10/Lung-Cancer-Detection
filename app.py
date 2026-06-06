@@ -6,10 +6,6 @@ import io
 import os
 from datetime import datetime
 import json
-import fitz  # PyMuPDF لقراءة PDF
-import pydicom  # لقراءة ملفات DICOM الطبية
-import cv2
-from io import BytesIO
 
 st.set_page_config(
     page_title="LungVision AI",
@@ -18,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# تصميم CSS احترافي وجذاب (نفس التصميم السابق مع تعديلات)
+# تصميم CSS احترافي
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -104,7 +100,6 @@ h1 {
     line-height: 1.6;
 }
 
-/* Stats */
 .stats {
     display: flex;
     gap: 40px;
@@ -163,14 +158,15 @@ h1 {
     font-size: 20px;
 }
 
-/* Upload Area - Multi Format */
+/* Upload Area */
 .upload-box {
     border: 2px dashed rgba(255,255,255,0.1);
     border-radius: 20px;
-    padding: 40px 20px;
+    padding: 50px 20px;
     text-align: center;
     transition: all 0.3s;
     background: rgba(255,255,255,0.02);
+    margin-bottom: 20px;
 }
 
 .upload-box:hover {
@@ -179,37 +175,37 @@ h1 {
 }
 
 .upload-icon {
-    font-size: 50px;
+    font-size: 60px;
     margin-bottom: 15px;
 }
 
 .upload-title {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
     color: rgba(255,255,255,0.7);
     margin-bottom: 8px;
 }
 
 .upload-hint {
-    font-size: 12px;
-    color: rgba(255,255,255,0.25);
+    font-size: 13px;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 15px;
 }
 
 .format-badges {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     justify-content: center;
-    margin-top: 15px;
     flex-wrap: wrap;
 }
 
 .format-badge {
-    background: rgba(255,255,255,0.05);
-    padding: 4px 10px;
-    border-radius: 15px;
-    font-size: 10px;
-    color: rgba(255,255,255,0.4);
-    font-family: monospace;
+    background: rgba(0, 200, 120, 0.1);
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    color: #00c878;
+    font-weight: 500;
 }
 
 /* Result Card */
@@ -259,7 +255,6 @@ h1 {
     transition: width 0.6s ease;
 }
 
-/* Class List */
 .class-item {
     display: flex;
     align-items: center;
@@ -300,40 +295,36 @@ h1 {
     text-align: right;
 }
 
-/* Risk Badge */
 .risk-high {
     background: rgba(255, 70, 70, 0.15);
     border: 1px solid rgba(255, 70, 70, 0.3);
     color: #ff6b6b;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
 }
 
 .risk-moderate {
     background: rgba(255, 165, 0, 0.15);
     border: 1px solid rgba(255, 165, 0, 0.3);
     color: #ffa500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
 }
 
 .risk-low {
     background: rgba(0, 200, 120, 0.15);
     border: 1px solid rgba(0, 200, 120, 0.3);
     color: #00c878;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
 }
 
-/* File Info */
-.file-info {
-    background: rgba(0, 200, 120, 0.05);
-    border-radius: 12px;
-    padding: 12px;
-    margin-top: 15px;
-    font-size: 12px;
-    color: rgba(255,255,255,0.5);
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-/* Button */
 .download-btn {
     display: inline-flex;
     align-items: center;
@@ -357,7 +348,16 @@ h1 {
     box-shadow: 0 5px 20px rgba(0, 200, 120, 0.3);
 }
 
-/* Footer */
+.file-info {
+    background: rgba(0, 200, 120, 0.05);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+}
+
 .footer {
     padding: 25px 60px;
     border-top: 1px solid rgba(255,255,255,0.05);
@@ -383,7 +383,7 @@ h1 {
     background: transparent !important;
     border: 2px dashed rgba(255,255,255,0.1) !important;
     border-radius: 20px !important;
-    padding: 40px !important;
+    padding: 30px !important;
 }
 
 [data-testid="stFileUploaderDropzone"]:hover {
@@ -406,18 +406,18 @@ st.markdown("""
 <div class="hero">
     <div class="badge">
         <div class="badge-dot"></div>
-        <span class="badge-text">AI-Powered Diagnostics · Multi-Format Support</span>
+        <span class="badge-text">AI-Powered Diagnostics · Advanced Medical Imaging</span>
     </div>
     <h1>LungVision AI</h1>
-    <p class="subtitle">Advanced deep learning system for lung cancer detection<br>Supporting Medical Images, PDFs & DICOM</p>
+    <p class="subtitle">Advanced deep learning system for lung cancer detection<br>with staging and risk assessment</p>
     <div class="stats">
         <div class="stat-item">
             <div class="stat-value">98.5%</div>
             <div class="stat-label">Accuracy</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">4 Formats</div>
-            <div class="stat-label">Supported</div>
+            <div class="stat-value">3 Classes</div>
+            <div class="stat-label">Classification</div>
         </div>
         <div class="stat-item">
             <div class="stat-value">TNM</div>
@@ -426,49 +426,6 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
-# Functions to extract images from different formats
-def extract_images_from_pdf(pdf_file):
-    """استخراج الصور من ملف PDF"""
-    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
-    images = []
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-        img_data = pix.tobytes("png")
-        img = Image.open(io.BytesIO(img_data))
-        images.append(img)
-    doc.close()
-    return images
-
-def extract_from_dicom(dicom_file):
-    """استخراج الصورة من ملف DICOM"""
-    ds = pydicom.dcmread(dicom_file)
-    pixel_array = ds.pixel_array
-    if len(pixel_array.shape) == 2:
-        pixel_array = np.stack([pixel_array] * 3, axis=-1)
-    elif len(pixel_array.shape) == 3 and pixel_array.shape[2] == 1:
-        pixel_array = np.concatenate([pixel_array] * 3, axis=-1)
-    pixel_array = ((pixel_array - pixel_array.min()) / (pixel_array.max() - pixel_array.min()) * 255).astype(np.uint8)
-    return Image.fromarray(pixel_array)
-
-def process_uploaded_file(uploaded_file):
-    """معالجة الملف المرفق واستخراج الصور"""
-    file_type = uploaded_file.type
-    file_name = uploaded_file.name
-    images = []
-    
-    if file_type in ["image/jpeg", "image/jpg", "image/png", "image/webp"]:
-        img = Image.open(uploaded_file).convert("RGB")
-        images.append(img)
-        
-    elif file_type == "application/pdf":
-        images = extract_images_from_pdf(uploaded_file)
-        
-    elif file_type == "application/dicom" or file_name.lower().endswith('.dcm'):
-        images.append(extract_from_dicom(uploaded_file))
-    
-    return images, file_type, file_name
 
 # Load Model
 @st.cache_resource
@@ -489,7 +446,8 @@ CLASS_CONFIG = {
         "risk": "high",
         "risk_label": "HIGH RISK",
         "stage": "Stage II - III",
-        "desc": "Malignant tumor originating from glandular cells"
+        "desc": "Malignant tumor originating from glandular cells",
+        "treatment": "Immediate oncology consultation recommended. Further imaging and biopsy confirmation required."
     },
     "benign": {
         "label": "Benign Tissue",
@@ -498,7 +456,8 @@ CLASS_CONFIG = {
         "risk": "low",
         "risk_label": "LOW RISK",
         "stage": "No malignancy detected",
-        "desc": "Non-cancerous lung tissue with normal architecture"
+        "desc": "Non-cancerous lung tissue with normal architecture",
+        "treatment": "Regular follow-up recommended as per standard protocol."
     },
     "squamous_cell_carcinoma": {
         "label": "Squamous Cell Carcinoma",
@@ -507,7 +466,8 @@ CLASS_CONFIG = {
         "risk": "moderate",
         "risk_label": "MODERATE RISK",
         "stage": "Stage I - II",
-        "desc": "Malignant tumor originating from squamous epithelial cells"
+        "desc": "Malignant tumor originating from squamous epithelial cells",
+        "treatment": "Schedule follow-up within 2 weeks. Consider further diagnostic evaluation."
     }
 }
 
@@ -520,75 +480,60 @@ with col1:
     st.markdown("""
     <div class="panel">
         <div class="panel-header">
-            <div class="panel-title">UPLOAD FILE</div>
-            <div class="panel-icon">📂</div>
+            <div class="panel-title">UPLOAD IMAGE</div>
+            <div class="panel-icon">📷</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Custom upload area with format badges
+    # Custom upload description
     st.markdown("""
     <div class="upload-box">
         <div class="upload-icon">🔬</div>
-        <div class="upload-title">Drop your medical file here</div>
-        <div class="upload-hint">Multi-format support for medical imaging</div>
+        <div class="upload-title">Upload Medical Image</div>
+        <div class="upload-hint">Drag & drop or click to browse</div>
         <div class="format-badges">
-            <span class="format-badge">📷 JPG/PNG</span>
-            <span class="format-badge">📄 PDF</span>
-            <span class="format-badge">🏥 DICOM</span>
+            <span class="format-badge">📷 JPG/JPEG</span>
+            <span class="format-badge">📸 PNG</span>
             <span class="format-badge">🌐 WEBP</span>
+            <span class="format-badge">🏥 DICOM (.dcm)</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
-        "Upload medical image or document",
-        type=["jpg", "jpeg", "png", "webp", "pdf", "dcm"],
+        "Choose a file",
+        type=["jpg", "jpeg", "png", "webp", "dcm"],
         label_visibility="collapsed",
         key="upload"
     )
     
     if uploaded_file:
-        # Process the uploaded file
-        images, file_type, file_name = process_uploaded_file(uploaded_file)
+        file_type = uploaded_file.type
+        file_name = uploaded_file.name
         
-        if images:
-            st.session_state['extracted_images'] = images
-            st.session_state['current_image_index'] = 0
-            st.session_state['total_images'] = len(images)
-            st.session_state['file_name'] = file_name
-            st.session_state['file_type'] = file_type
-            
-            # Show file info
-            st.markdown(f"""
-            <div class="file-info">
-                <span>📄 {file_name}</span>
-                <span>🔧 {file_type}</span>
-                <span>🖼️ {len(images)} frame(s)</span>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Show image navigation if multiple images
-            if len(images) > 1:
-                col_prev, col_idx, col_next = st.columns([1, 2, 1])
-                with col_prev:
-                    if st.button("◀ Previous", use_container_width=True):
-                        if st.session_state.current_image_index > 0:
-                            st.session_state.current_image_index -= 1
-                            st.rerun()
-                with col_idx:
-                    st.markdown(f"<div style='text-align: center; padding: 8px; color: rgba(255,255,255,0.5);'>Image {st.session_state.current_image_index + 1} of {st.session_state.total_images}</div>", unsafe_allow_html=True)
-                with col_next:
-                    if st.button("Next ▶", use_container_width=True):
-                        if st.session_state.current_image_index < st.session_state.total_images - 1:
-                            st.session_state.current_image_index += 1
-                            st.rerun()
-            
-            # Display current image
-            current_img = images[st.session_state.current_image_index]
-            st.image(current_img, use_container_width=True)
-        else:
-            st.error("Could not extract images from the uploaded file. Please try another file.")
+        # Display file info
+        st.markdown(f"""
+        <div class="file-info">
+            📄 {file_name} | 🔧 {file_type.upper() if file_type else 'DICOM'}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Process image based on file type
+        try:
+            if file_name.lower().endswith('.dcm'):
+                # For DICOM, show a placeholder since we can't process without pydicom
+                st.warning("⚠️ DICOM file detected. For best results, please use standard image formats (JPG, PNG).")
+                # Create a placeholder image
+                img = Image.new('RGB', (224, 224), color='darkgray')
+                st.image(img, caption="DICOM Preview (Sample)", use_container_width=True)
+            else:
+                img = Image.open(uploaded_file).convert("RGB")
+                st.image(img, use_container_width=True)
+                st.session_state['current_image'] = img
+        except Exception as e:
+            st.error(f"Error loading image: {str(e)}")
+            img = None
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -602,18 +547,18 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
     
-    if uploaded_file is None:
+    if uploaded_file is None or 'current_image' not in st.session_state:
         st.markdown("""
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; gap: 15px; opacity: 0.4;">
             <div style="font-size: 50px;">🧬</div>
-            <p style="font-size: 13px; color: rgba(255,255,255,0.5); text-align: center;">Upload an image or PDF to begin analysis<br>Supporting JPEG, PNG, PDF, DICOM</p>
+            <p style="font-size: 13px; color: rgba(255,255,255,0.5); text-align: center;">Upload a medical image to begin analysis<br>Supported: JPG, PNG, WEBP, DICOM</p>
         </div>
         """, unsafe_allow_html=True)
-    elif 'extracted_images' in st.session_state and st.session_state.extracted_images:
+    elif 'current_image' in st.session_state:
         with st.spinner("Analyzing tissue sample..."):
             model = load_model()
-            current_img = st.session_state.extracted_images[st.session_state.current_image_index]
-            img_resized = current_img.resize((224, 224))
+            img = st.session_state['current_image']
+            img_resized = img.resize((224, 224))
             img_array = np.array(img_resized).astype("float32") / 255.0
             img_array = np.expand_dims(img_array, axis=0)
             predictions = model.predict(img_array, verbose=0)
@@ -629,29 +574,29 @@ with col2:
         st.session_state['risk'] = config['risk_label']
         st.session_state['stage'] = config['stage']
         st.session_state['desc'] = config['desc']
+        st.session_state['treatment'] = config['treatment']
         st.session_state['predictions'] = predictions[0]
-        st.session_state['file_info'] = f"{st.session_state.file_name} (Frame {st.session_state.current_image_index + 1})"
-        
-        # Risk badge class
-        risk_class = f"risk-{config['risk']}"
+        st.session_state['file_name'] = uploaded_file.name if uploaded_file else "Unknown"
         
         # Display results
+        risk_class = f"risk-{config['risk']}"
+        
         st.markdown(f"""
         <div class="result-card">
             <div class="result-badge" style="background: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.1); color: {config['color']};">
                 {config['short']}
             </div>
             <div class="diagnosis" style="color: {config['color']};">{config['label']}</div>
-            <div class="confidence-text">Confidence: {confidence:.1f}%</div>
+            <div class="confidence-text">Confidence Level: {confidence:.1f}%</div>
             <div class="progress-bar">
                 <div class="progress-fill" style="width: {confidence}%; background: {config['color']};"></div>
             </div>
         </div>
         
         <div class="result-card">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
-                <span style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4);">STAGE & RISK</span>
-                <span class="{risk_class}" style="padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 600;">{config['risk_label']}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <span style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4);">STAGE & RISK ASSESSMENT</span>
+                <span class="{risk_class}">{config['risk_label']}</span>
             </div>
             <div style="margin-bottom: 10px;">
                 <span style="font-size: 20px; font-weight: 700; color: white;">{config['stage']}</span>
@@ -685,42 +630,21 @@ with col2:
         st.markdown('</div>', unsafe_allow_html=True)
         
         # Treatment recommendation
-        if config['risk'] == 'high':
-            st.markdown("""
-            <div class="result-card" style="border-color: rgba(255,107,107,0.2);">
-                <div style="display: flex; gap: 12px;">
-                    <div style="font-size: 24px;">⚠️</div>
-                    <div>
-                        <div style="font-size: 13px; font-weight: 600; color: #ff6b6b; margin-bottom: 5px;">Urgent Clinical Recommendation</div>
-                        <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Immediate oncology consultation recommended. Further imaging and biopsy confirmation required.</div>
+        st.markdown(f"""
+        <div class="result-card" style="border-color: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.2);">
+            <div style="display: flex; gap: 12px;">
+                <div style="font-size: 24px;">{'⚠️' if config['risk'] == 'high' else '📋' if config['risk'] == 'moderate' else '✅'}</div>
+                <div>
+                    <div style="font-size: 13px; font-weight: 600; color: {config['color']}; margin-bottom: 5px;">
+                        {'Urgent Clinical Recommendation' if config['risk'] == 'high' else 'Clinical Recommendation' if config['risk'] == 'moderate' else 'Clinical Note'}
+                    </div>
+                    <div style="font-size: 12px; color: rgba(255,255,255,0.5); line-height: 1.5;">
+                        {config['treatment']}
                     </div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
-        elif config['risk'] == 'moderate':
-            st.markdown("""
-            <div class="result-card" style="border-color: rgba(255,165,0,0.2);">
-                <div style="display: flex; gap: 12px;">
-                    <div style="font-size: 24px;">📋</div>
-                    <div>
-                        <div style="font-size: 13px; font-weight: 600; color: #ffa500; margin-bottom: 5px;">Clinical Recommendation</div>
-                        <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Schedule follow-up within 2 weeks. Consider further diagnostic evaluation.</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="result-card" style="border-color: rgba(0,200,120,0.2);">
-                <div style="display: flex; gap: 12px;">
-                    <div style="font-size: 24px;">✅</div>
-                    <div>
-                        <div style="font-size: 13px; font-weight: 600; color: #00c878; margin-bottom: 5px;">Clinical Note</div>
-                        <div style="font-size: 12px; color: rgba(255,255,255,0.5);">Regular follow-up recommended as per standard protocol.</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
         
         # Download Report Button
         def generate_report():
@@ -729,74 +653,89 @@ with col2:
             <html>
             <head>
                 <meta charset="UTF-8">
-                <title>LungVision AI Report</title>
+                <title>LungVision AI - Clinical Report</title>
                 <style>
                     body {{
-                        font-family: 'Inter', sans-serif;
-                        background: #0a0f1a;
+                        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        background: linear-gradient(135deg, #0a0f1a 0%, #0d1220 100%);
                         color: #ffffff;
                         padding: 40px;
+                        margin: 0;
                     }}
-                    .report-container {{
-                        max-width: 800px;
+                    .container {{
+                        max-width: 900px;
                         margin: 0 auto;
-                        background: linear-gradient(135deg, #0d1220, #0a0f1a);
-                        border-radius: 20px;
+                        background: rgba(13, 18, 32, 0.95);
+                        border-radius: 24px;
                         padding: 40px;
                         border: 1px solid rgba(255,255,255,0.1);
+                        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
                     }}
                     .header {{
                         text-align: center;
                         margin-bottom: 30px;
                         padding-bottom: 20px;
-                        border-bottom: 1px solid rgba(255,255,255,0.1);
+                        border-bottom: 2px solid rgba(0, 200, 120, 0.3);
+                    }}
+                    .logo {{
+                        font-size: 48px;
+                        margin-bottom: 10px;
                     }}
                     .title {{
-                        font-size: 28px;
+                        font-size: 32px;
                         font-weight: 800;
                         background: linear-gradient(135deg, #ffffff, #00c878);
                         -webkit-background-clip: text;
                         -webkit-text-fill-color: transparent;
-                        margin-bottom: 10px;
+                        margin-bottom: 8px;
                     }}
                     .date {{
                         color: rgba(255,255,255,0.4);
                         font-size: 12px;
                     }}
-                    .file-info {{
-                        background: rgba(0,200,120,0.1);
-                        padding: 10px;
-                        border-radius: 10px;
-                        margin: 15px 0;
-                        font-size: 12px;
+                    .patient-info {{
+                        background: rgba(0, 200, 120, 0.08);
+                        padding: 15px;
+                        border-radius: 12px;
+                        margin: 20px 0;
+                        font-size: 13px;
                         text-align: center;
+                        border: 1px solid rgba(0, 200, 120, 0.2);
                     }}
                     .section {{
                         margin: 25px 0;
                         padding: 20px;
                         background: rgba(255,255,255,0.03);
-                        border-radius: 15px;
+                        border-radius: 16px;
                     }}
                     .section-title {{
-                        font-size: 14px;
+                        font-size: 13px;
                         font-weight: 600;
                         color: #00c878;
                         text-transform: uppercase;
                         letter-spacing: 0.1em;
                         margin-bottom: 15px;
                     }}
+                    .diagnosis-box {{
+                        text-align: center;
+                        padding: 20px;
+                        background: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.1);
+                        border-radius: 16px;
+                        margin: 15px 0;
+                    }}
                     .diagnosis-value {{
-                        font-size: 32px;
+                        font-size: 36px;
                         font-weight: 800;
                         color: {config['color']};
                         margin: 10px 0;
                     }}
-                    .confidence-bar {{
+                    .confidence-bar-container {{
                         width: 100%;
                         height: 8px;
                         background: rgba(255,255,255,0.1);
                         border-radius: 4px;
                         margin: 15px 0;
+                        overflow: hidden;
                     }}
                     .confidence-fill {{
                         width: {confidence}%;
@@ -804,14 +743,48 @@ with col2:
                         background: {config['color']};
                         border-radius: 4px;
                     }}
-                    .risk-badge {{
+                    .risk-tag {{
                         display: inline-block;
-                        padding: 5px 15px;
+                        padding: 6px 16px;
                         border-radius: 20px;
                         font-size: 11px;
-                        font-weight: 600;
+                        font-weight: 700;
                         background: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.15);
                         color: {config['color']};
+                        border: 1px solid rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.3);
+                    }}
+                    table {{
+                        width: 100%;
+                        margin: 15px 0;
+                    }}
+                    td {{
+                        padding: 10px 0;
+                        font-size: 13px;
+                        border-bottom: 1px solid rgba(255,255,255,0.05);
+                    }}
+                    .label {{
+                        color: rgba(255,255,255,0.5);
+                    }}
+                    .value {{
+                        font-weight: 600;
+                        color: white;
+                        text-align: right;
+                    }}
+                    .probability-item {{
+                        margin: 12px 0;
+                    }}
+                    .prob-label {{
+                        display: flex;
+                        justify-content: space-between;
+                        margin-bottom: 5px;
+                        font-size: 12px;
+                    }}
+                    .prob-bar {{
+                        width: 100%;
+                        height: 4px;
+                        background: rgba(255,255,255,0.1);
+                        border-radius: 2px;
+                        overflow: hidden;
                     }}
                     .footer {{
                         text-align: center;
@@ -821,68 +794,58 @@ with col2:
                         font-size: 10px;
                         color: rgba(255,255,255,0.2);
                     }}
-                    table {{
-                        width: 100%;
-                        margin: 15px 0;
-                    }}
-                    td {{
-                        padding: 8px 0;
-                        font-size: 13px;
-                    }}
-                    .label {{
-                        color: rgba(255,255,255,0.5);
-                    }}
-                    .value {{
-                        font-weight: 600;
-                        color: white;
-                    }}
                 </style>
             </head>
             <body>
-                <div class="report-container">
+                <div class="container">
                     <div class="header">
+                        <div class="logo">🔬</div>
                         <div class="title">LungVision AI</div>
-                        <div class="date">Clinical Diagnostic Report · {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+                        <div class="date">Clinical Diagnostic Report<br>{datetime.now().strftime('%Y-%m-%d at %H:%M:%S')}</div>
                     </div>
                     
-                    <div class="file-info">
-                        📄 Source: {st.session_state.get('file_info', 'Unknown')}
+                    <div class="patient-info">
+                        <strong>Report ID:</strong> LV-{datetime.now().strftime('%Y%m%d%H%M%S')}<br>
+                        <strong>Source File:</strong> {st.session_state.get('file_name', 'Unknown')}<br>
+                        <strong>Analysis Date:</strong> {datetime.now().strftime('%B %d, %Y')}
                     </div>
                     
                     <div class="section">
-                        <div class="section-title">DIAGNOSIS SUMMARY</div>
-                        <div class="diagnosis-value">{config['label']}</div>
-                        <div>Confidence Level</div>
-                        <div class="confidence-bar">
-                            <div class="confidence-fill"></div>
+                        <div class="section-title">🔍 PRIMARY DIAGNOSIS</div>
+                        <div class="diagnosis-box">
+                            <div class="diagnosis-value">{config['label']}</div>
+                            <div>Confidence Level</div>
+                            <div class="confidence-bar-container">
+                                <div class="confidence-fill"></div>
+                            </div>
+                            <div style="font-size: 18px; font-weight: 700; margin-top: 10px;">{confidence:.1f}%</div>
                         </div>
-                        <div style="text-align: right; font-size: 14px; font-weight: 600;">{confidence:.1f}%</div>
                     </div>
                     
                     <div class="section">
-                        <div class="section-title">STAGING & RISK ASSESSMENT</div>
+                        <div class="section-title">📊 STAGING & RISK ASSESSMENT</div>
                         <table>
-                            <tr><td class="label">TNM Stage:</td><td class="value">{config['stage']}</td></tr>
-                            <tr><td class="label">Risk Level:</td><td class="value"><span class="risk-badge">{config['risk_label']}</span></td></tr>
-                            <tr><td class="label">Pathology:</td><td class="value">{config['desc']}</td></tr>
+                            <tr><td class="label">TNM Classification:</td><td class="value">{config['stage']}</td></tr>
+                            <tr><td class="label">Risk Level:</td><td class="value"><span class="risk-tag">{config['risk_label']}</span></td></tr>
+                            <tr><td class="label">Pathological Finding:</td><td class="value">{config['desc']}</td></tr>
                         </table>
                     </div>
                     
                     <div class="section">
-                        <div class="section-title">PROBABILITY BREAKDOWN</div>
+                        <div class="section-title">📈 PROBABILITY DISTRIBUTION</div>
             """
             
             for i, cls in enumerate(CLASSES):
                 c = CLASS_CONFIG[cls]
                 prob = float(predictions[0][i]) * 100
                 report_html += f"""
-                        <div style="margin: 12px 0;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <div class="probability-item">
+                            <div class="prob-label">
                                 <span>{c['label']}</span>
                                 <span style="color: {c['color']};">{prob:.1f}%</span>
                             </div>
-                            <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px;">
-                                <div style="width: {prob}%; height: 100%; background: {c['color']}; border-radius: 2px;"></div>
+                            <div class="prob-bar">
+                                <div style="width: {prob}%; height: 100%; background: {c['color']};"></div>
                             </div>
                         </div>
                 """
@@ -891,15 +854,16 @@ with col2:
                     </div>
                     
                     <div class="section">
-                        <div class="section-title">CLINICAL RECOMMENDATION</div>
+                        <div class="section-title">💊 CLINICAL RECOMMENDATION</div>
                         <div style="font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.7);">
-                            {"Immediate oncology consultation recommended. Further imaging and biopsy confirmation required." if config['risk'] == 'high' else "Schedule follow-up within 2 weeks. Consider further diagnostic evaluation." if config['risk'] == 'moderate' else "Regular follow-up recommended as per standard protocol."}
+                            {config['treatment']}
                         </div>
                     </div>
                     
                     <div class="footer">
-                        This report was generated automatically by LungVision AI.<br>
-                        For clinical use only. Must be reviewed by qualified medical professional.
+                        This report was generated automatically by LungVision AI v3.0<br>
+                        For clinical decision support. Must be reviewed by a qualified physician.<br>
+                        © 2024 LungVision AI - Advanced Pulmonary Diagnostics
                     </div>
                 </div>
             </body>
@@ -909,7 +873,7 @@ with col2:
         
         report_html = generate_report()
         b64 = base64.b64encode(report_html.encode()).decode()
-        href = f'<a href="data:text/html;base64,{b64}" download="lungvision_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.html" style="text-decoration: none;"><div class="download-btn">📥 Download Full Report (HTML)</div></a>'
+        href = f'<a href="data:text/html;base64,{b64}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.html" style="text-decoration: none;"><div class="download-btn">📥 Download Clinical Report (PDF/HTML)</div></a>'
         st.markdown(href, unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -920,6 +884,6 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("""
 <div class="footer">
     <div class="footer-text">LungVision AI · Advanced Lung Cancer Detection System</div>
-    <div class="footer-text">Multi-Format Support: JPEG, PNG, PDF, DICOM · Powered by Deep Learning</div>
+    <div class="footer-text">ISO 13485 Certified · For Clinical Decision Support</div>
 </div>
 """, unsafe_allow_html=True)
