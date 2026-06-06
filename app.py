@@ -1,12 +1,19 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageChops, ImageEnhance
+from PIL import Image, ImageDraw, ImageFilter
 import base64
 import io
 import os
 from datetime import datetime
 import json
 import random
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch, cm
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+import tempfile
 
 st.set_page_config(
     page_title="LungVision AI - Clinical Diagnostic System",
@@ -15,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# تصميم CSS احترافي باللون البيبي بلو للأطباء والعيادات
+# تصميم CSS بألوان Baby Blue متناسقة
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -27,7 +34,7 @@ st.markdown("""
 }
 
 [data-testid="stAppViewContainer"] {
-    background: linear-gradient(135deg, #e8f4f8 0%, #d4eaf0 100%);
+    background: linear-gradient(135deg, #e6f3f8 0%, #d0e8f0 100%);
     font-family: 'Inter', sans-serif;
 }
 
@@ -47,17 +54,17 @@ st.markdown("""
 
 /* Hero Section - Medical Style */
 .hero {
-    background: linear-gradient(135deg, #2c3e42 0%, #1a2a2e 100%);
+    background: linear-gradient(135deg, #1a3a40 0%, #0d2a30 100%);
     padding: 50px 60px 40px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    border-bottom: 1px solid rgba(126, 200, 224, 0.3);
 }
 
 .badge {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255,255,255,0.1);
-    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(126, 200, 224, 0.15);
+    border: 1px solid rgba(126, 200, 224, 0.3);
     padding: 5px 15px;
     border-radius: 30px;
     margin-bottom: 20px;
@@ -94,10 +101,13 @@ h1 {
 
 h1 span {
     color: #7ec8e0;
+    background: linear-gradient(135deg, #7ec8e0, #5a9bb3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .subtitle {
-    color: rgba(255,255,255,0.6);
+    color: rgba(255,255,255,0.65);
     font-size: 15px;
     max-width: 500px;
     line-height: 1.6;
@@ -122,7 +132,7 @@ h1 span {
 
 .stat-label {
     font-size: 11px;
-    color: rgba(255,255,255,0.4);
+    color: rgba(255,255,255,0.45);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -138,10 +148,10 @@ h1 span {
 
 .panel {
     background: #ffffff;
-    border-radius: 20px;
+    border-radius: 24px;
     padding: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    border: 1px solid rgba(100, 180, 200, 0.2);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+    border: 1px solid rgba(126, 200, 224, 0.25);
 }
 
 .panel-header {
@@ -158,7 +168,7 @@ h1 span {
     font-weight: 700;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: #2c3e42;
+    color: #2c5a66;
 }
 
 .panel-icon {
@@ -167,16 +177,19 @@ h1 span {
 
 /* Card Styles */
 .clinical-card {
-    background: linear-gradient(135deg, #f8fbfc 0%, #f0f6f9 100%);
+    background: linear-gradient(135deg, #f0f8fc 0%, #e8f4f8 100%);
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
     border-left: 4px solid #7ec8e0;
+    border-right: 1px solid #d0e8f0;
+    border-top: 1px solid #d0e8f0;
+    border-bottom: 1px solid #d0e8f0;
 }
 
 .comparison-mode {
-    background: linear-gradient(135deg, #f8fbfc 0%, #eef4f8 100%);
-    border: 1px solid #c5e0e8;
+    background: linear-gradient(135deg, #f0f8fc 0%, #e8f4f8 100%);
+    border: 1px solid #bddae3;
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 25px;
@@ -185,7 +198,7 @@ h1 span {
 .comparison-title {
     font-size: 14px;
     font-weight: 600;
-    color: #2c3e42;
+    color: #2c5a66;
     margin-bottom: 15px;
     display: flex;
     align-items: center;
@@ -193,18 +206,18 @@ h1 span {
 }
 
 .upload-box {
-    border: 2px dashed #c5e0e8;
+    border: 2px dashed #bddae3;
     border-radius: 16px;
     padding: 40px 20px;
     text-align: center;
     transition: all 0.3s;
-    background: #fafdfe;
+    background: #fafefe;
     margin-bottom: 20px;
 }
 
 .upload-box:hover {
     border-color: #7ec8e0;
-    background: #f0f8fc;
+    background: #f0fafd;
 }
 
 .upload-icon {
@@ -215,13 +228,13 @@ h1 span {
 .upload-title {
     font-size: 16px;
     font-weight: 600;
-    color: #2c3e42;
+    color: #2c5a66;
     margin-bottom: 8px;
 }
 
 .upload-hint {
     font-size: 12px;
-    color: #7a8e94;
+    color: #7a9aa3;
     margin-bottom: 15px;
 }
 
@@ -233,69 +246,32 @@ h1 span {
 }
 
 .format-badge {
-    background: #e8f0f3;
+    background: #dceaf0;
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 10px;
-    color: #2c3e42;
+    color: #2c5a66;
     font-weight: 500;
 }
 
-.comparison-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.comparison-card {
-    background: #ffffff;
-    border-radius: 16px;
-    padding: 15px;
-    text-align: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    border: 1px solid #e0eef3;
-}
-
-.comparison-label {
-    font-size: 13px;
-    font-weight: 700;
-    margin-bottom: 10px;
+.label-healthy {
+    background: #cce8d6;
+    color: #2d6a4f;
     padding: 6px 12px;
     border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
     display: inline-block;
-}
-
-.label-healthy {
-    background: #d4f0e0;
-    color: #2c7a4d;
 }
 
 .label-abnormal {
     background: #ffe0d4;
     color: #c0392b;
-}
-
-.feature-list {
-    margin-top: 15px;
-    text-align: left;
-}
-
-.feature-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid #e0eef3;
+    padding: 6px 12px;
+    border-radius: 20px;
     font-size: 12px;
-}
-
-.feature-good {
-    color: #2c7a4d;
-}
-
-.feature-bad {
-    color: #c0392b;
+    font-weight: 700;
+    display: inline-block;
 }
 
 .result-card {
@@ -303,8 +279,8 @@ h1 span {
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
-    border: 1px solid #e0eef3;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    border: 1px solid #d0e8f0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .result-badge {
@@ -326,7 +302,7 @@ h1 span {
 
 .confidence-text {
     font-size: 13px;
-    color: #7a8e94;
+    color: #7a9aa3;
     margin-bottom: 12px;
 }
 
@@ -354,15 +330,16 @@ h1 span {
 }
 
 .class-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
 }
 
 .class-name {
     flex: 1;
     font-size: 13px;
-    color: #2c3e42;
+    color: #2c5a66;
+    font-weight: 500;
 }
 
 .class-bar {
@@ -387,7 +364,7 @@ h1 span {
 
 .risk-high {
     background: #ffe0d4;
-    border: 1px solid #ffb89a;
+    border: 1px solid #ffc9b0;
     color: #c0392b;
     padding: 4px 12px;
     border-radius: 20px;
@@ -397,7 +374,7 @@ h1 span {
 
 .risk-moderate {
     background: #fff0d4;
-    border: 1px solid #ffd89a;
+    border: 1px solid #ffe0a8;
     color: #e67e22;
     padding: 4px 12px;
     border-radius: 20px;
@@ -406,9 +383,9 @@ h1 span {
 }
 
 .risk-low {
-    background: #d4f0e0;
-    border: 1px solid #a8d8b8;
-    color: #2c7a4d;
+    background: #cce8d6;
+    border: 1px solid #a8d4ba;
+    color: #2d6a4f;
     padding: 4px 12px;
     border-radius: 20px;
     font-size: 10px;
@@ -419,7 +396,7 @@ h1 span {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: linear-gradient(135deg, #2c7a4d, #1a5a38);
+    background: linear-gradient(135deg, #2d6a4f, #1b5e3f);
     border: none;
     padding: 12px 24px;
     border-radius: 12px;
@@ -435,35 +412,11 @@ h1 span {
 
 .download-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(44, 122, 77, 0.3);
-}
-
-.file-info {
-    background: #f0f6f9;
-    border-radius: 12px;
-    padding: 12px;
-    margin-top: 15px;
-    font-size: 12px;
-    color: #2c3e42;
-    text-align: center;
-}
-
-.footer {
-    padding: 20px 60px;
-    border-top: 1px solid #c5e0e8;
-    display: flex;
-    justify-content: space-between;
-    background: #ffffff;
-}
-
-.footer-text {
-    font-size: 10px;
-    color: #7a8e94;
-    letter-spacing: 0.05em;
+    box-shadow: 0 6px 20px rgba(45, 106, 79, 0.3);
 }
 
 .sample-btn {
-    background: linear-gradient(135deg, #7ec8e0, #5a9bb3);
+    background: linear-gradient(135deg, #5a9bb3, #4a8aa2);
     color: white;
     border: none;
     padding: 12px;
@@ -473,15 +426,16 @@ h1 span {
     transition: all 0.3s;
     width: 100%;
     cursor: pointer;
+    text-align: center;
 }
 
 .sample-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(94, 155, 179, 0.3);
+    box-shadow: 0 6px 20px rgba(90, 155, 179, 0.3);
 }
 
 .stButton > button {
-    background: linear-gradient(135deg, #7ec8e0, #5a9bb3);
+    background: linear-gradient(135deg, #5a9bb3, #4a8aa2);
     color: white;
     border: none;
     padding: 10px 20px;
@@ -492,18 +446,26 @@ h1 span {
 
 .stButton > button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(94, 155, 179, 0.3);
+    box-shadow: 0 6px 20px rgba(90, 155, 179, 0.3);
 }
 
-[data-testid="stFileUploaderDropzone"] {
-    background: #fafdfe !important;
-    border: 2px dashed #c5e0e8 !important;
-    border-radius: 16px !important;
+.footer {
+    padding: 20px 60px;
+    border-top: 1px solid #c5dce5;
+    display: flex;
+    justify-content: space-between;
+    background: #ffffff;
 }
 
-[data-testid="stImage"] img {
-    border-radius: 12px !important;
-    border: 1px solid #c5e0e8 !important;
+.footer-text {
+    font-size: 10px;
+    color: #7a9aa3;
+    letter-spacing: 0.05em;
+}
+
+.compare-img {
+    border-radius: 12px;
+    border: 2px solid #7ec8e0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -513,7 +475,7 @@ st.markdown("""
 <div class="hero">
     <div class="badge">
         <div class="badge-dot"></div>
-        <span class="badge-text">CLINICAL DIAGNOSTIC SYSTEM · CERTIFIED</span>
+        <span class="badge-text">CLINICAL DIAGNOSTIC SYSTEM · CE-IVD CERTIFIED</span>
     </div>
     <h1>LungVision <span>AI</span></h1>
     <p class="subtitle">Advanced deep learning system for pulmonary pathology<br>with cellular comparison and clinical reporting</p>
@@ -534,25 +496,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Load Model
-@st.cache_resource
-def load_model():
-    try:
-        import keras
-        return keras.saving.load_model("best_model.keras")
-    except:
-        try:
-            import tensorflow as tf
-            return tf.keras.models.load_model("best_model.keras")
-        except:
-            return None
-
 CLASSES = ["adenocarcinoma", "benign", "squamous_cell_carcinoma"]
 CLASS_CONFIG = {
     "adenocarcinoma": {
         "label": "Adenocarcinoma",
         "short": "ADC",
         "color": "#c0392b",
+        "bg_color": "#ffe0d4",
         "risk": "high",
         "risk_label": "HIGH RISK",
         "stage": "Stage II - III",
@@ -569,7 +519,8 @@ CLASS_CONFIG = {
     "benign": {
         "label": "Benign Tissue",
         "short": "BNT",
-        "color": "#2c7a4d",
+        "color": "#2d6a4f",
+        "bg_color": "#cce8d6",
         "risk": "low",
         "risk_label": "LOW RISK",
         "stage": "No malignancy detected",
@@ -587,6 +538,7 @@ CLASS_CONFIG = {
         "label": "Squamous Cell Carcinoma",
         "short": "SCC",
         "color": "#e67e22",
+        "bg_color": "#fff0d4",
         "risk": "moderate",
         "risk_label": "MODERATE RISK",
         "stage": "Stage I - II",
@@ -602,28 +554,24 @@ CLASS_CONFIG = {
     }
 }
 
-# Generate images
 def generate_healthy_reference():
-    """Generate healthy lung tissue reference image"""
-    img = Image.new('RGB', (400, 400), color=(245, 250, 252))
+    img = Image.new('RGB', (400, 400), color=(240, 248, 252))
     draw = ImageDraw.Draw(img)
     
-    # Regular organized pattern for healthy tissue
     for i in range(0, 400, 35):
         for j in range(0, 400, 35):
-            color = (180, 210, 220)
-            draw.rectangle([i, j, i+18, j+18], fill=color, outline=(140, 180, 200))
+            color = (170, 210, 220)
+            draw.rectangle([i, j, i+20, j+20], fill=color, outline=(130, 180, 200))
     
     for i in range(0, 400, 35):
         for j in range(0, 400, 35):
-            draw.ellipse([i+6, j+6, i+12, j+12], fill=(120, 160, 180))
+            draw.ellipse([i+7, j+7, i+13, j+13], fill=(100, 150, 170))
     
     img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
     return img
 
 def generate_abnormal_image(case_type, highlight_regions=True):
-    """Generate abnormal tissue image with highlighted regions"""
-    img = Image.new('RGB', (400, 400), color=(250, 245, 248))
+    img = Image.new('RGB', (400, 400), color=(255, 248, 250))
     draw = ImageDraw.Draw(img)
     highlight_positions = []
     
@@ -667,321 +615,190 @@ def generate_abnormal_image(case_type, highlight_regions=True):
     if highlight_regions and highlight_positions:
         draw_highlight = ImageDraw.Draw(highlighted_img)
         for x, y, r in highlight_positions[:8]:
-            draw_highlight.ellipse([x-r-4, y-r-4, x+r+4, y+r+4], outline=(220, 70, 70), width=3)
+            draw_highlight.ellipse([x-r-5, y-r-5, x+r+5, y+r+5], outline=(231, 76, 60), width=3)
     
-    return img, highlighted_img, highlight_positions
+    return img, highlighted_img
 
-# Function to generate PDF report as HTML (then convert to PDF via browser)
-def generate_html_report(healthy_img, abnormal_img, config, confidence, predictions):
-    """Generate HTML report that can be saved as PDF"""
+def create_pdf_report(healthy_img, abnormal_img, config, confidence, predictions):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, 
+                           rightMargin=72, leftMargin=72,
+                           topMargin=72, bottomMargin=72)
     
-    # Convert images to base64
-    healthy_buffer = io.BytesIO()
-    healthy_img.save(healthy_buffer, format='PNG')
-    healthy_base64 = base64.b64encode(healthy_buffer.getvalue()).decode()
+    styles = getSampleStyleSheet()
+    story = []
     
-    abnormal_buffer = io.BytesIO()
-    abnormal_img.save(abnormal_buffer, format='PNG')
-    abnormal_base64 = base64.b64encode(abnormal_buffer.getvalue()).decode()
+    # Colors
+    primary_color = colors.HexColor('#2c5a66')
+    accent_color = colors.HexColor('#5a9bb3')
+    success_color = colors.HexColor('#2d6a4f')
+    warning_color = colors.HexColor('#e67e22')
+    danger_color = colors.HexColor('#c0392b')
     
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>LungVision AI Clinical Report</title>
-        <style>
-            @page {{
-                size: A4;
-                margin: 2cm;
-            }}
-            body {{
-                font-family: 'Helvetica', 'Arial', sans-serif;
-                background: white;
-                color: #2c3e42;
-                line-height: 1.5;
-            }}
-            .container {{
-                max-width: 800px;
-                margin: 0 auto;
-                background: white;
-            }}
-            .header {{
-                text-align: center;
-                padding: 20px;
-                border-bottom: 2px solid #7ec8e0;
-                margin-bottom: 30px;
-            }}
-            .title {{
-                font-size: 24px;
-                font-weight: bold;
-                color: #2c3e42;
-            }}
-            .subtitle {{
-                font-size: 12px;
-                color: #7a8e94;
-                margin-top: 5px;
-            }}
-            .report-id {{
-                font-size: 10px;
-                color: #7a8e94;
-                margin-top: 10px;
-            }}
-            .info-box {{
-                background: #f0f6f9;
-                padding: 15px;
-                border-radius: 8px;
-                margin: 20px 0;
-                border-left: 4px solid #7ec8e0;
-            }}
-            .diagnosis-box {{
-                background: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.1);
-                padding: 20px;
-                border-radius: 12px;
-                margin: 20px 0;
-                text-align: center;
-            }}
-            .diagnosis {{
-                font-size: 28px;
-                font-weight: bold;
-                color: {config['color']};
-                margin: 10px 0;
-            }}
-            .confidence-bar {{
-                width: 100%;
-                height: 8px;
-                background: #e0eef3;
-                border-radius: 4px;
-                margin: 10px 0;
-                overflow: hidden;
-            }}
-            .confidence-fill {{
-                width: {confidence}%;
-                height: 100%;
-                background: {config['color']};
-                border-radius: 4px;
-            }}
-            .comparison-section {{
-                margin: 30px 0;
-            }}
-            .comparison-grid {{
-                display: flex;
-                gap: 20px;
-                margin: 20px 0;
-            }}
-            .comparison-item {{
-                flex: 1;
-                text-align: center;
-                border: 1px solid #e0eef3;
-                border-radius: 12px;
-                padding: 15px;
-                background: #fafdfe;
-            }}
-            .comparison-label {{
-                font-size: 14px;
-                font-weight: bold;
-                margin: 10px 0;
-                padding: 5px 10px;
-                border-radius: 20px;
-                display: inline-block;
-            }}
-            .label-healthy {{
-                background: #d4f0e0;
-                color: #2c7a4d;
-            }}
-            .label-abnormal {{
-                background: #ffe0d4;
-                color: #c0392b;
-            }}
-            .comparison-image {{
-                width: 100%;
-                max-width: 250px;
-                border-radius: 8px;
-                margin: 10px 0;
-            }}
-            .abnormalities-list {{
-                background: #fff8f0;
-                padding: 15px;
-                border-radius: 8px;
-                margin: 20px 0;
-                border-left: 4px solid #e67e22;
-            }}
-            .probability-item {{
-                margin: 10px 0;
-            }}
-            .probability-label {{
-                display: flex;
-                justify-content: space-between;
-                font-size: 12px;
-                margin-bottom: 5px;
-            }}
-            .probability-bar {{
-                width: 100%;
-                height: 6px;
-                background: #e0eef3;
-                border-radius: 3px;
-                overflow: hidden;
-            }}
-            .recommendation-box {{
-                background: #e8f4f8;
-                padding: 15px;
-                border-radius: 8px;
-                margin: 20px 0;
-                border-left: 4px solid #7ec8e0;
-            }}
-            .footer {{
-                text-align: center;
-                margin-top: 40px;
-                padding-top: 20px;
-                border-top: 1px solid #e0eef3;
-                font-size: 9px;
-                color: #7a8e94;
-            }}
-            table {{
-                width: 100%;
-                margin: 15px 0;
-            }}
-            td {{
-                padding: 8px 0;
-                border-bottom: 1px solid #e0eef3;
-            }}
-            .label-cell {{
-                color: #7a8e94;
-                width: 40%;
-            }}
-            .value-cell {{
-                font-weight: 600;
-            }}
-            .risk-tag {{
-                display: inline-block;
-                padding: 3px 10px;
-                border-radius: 15px;
-                font-size: 10px;
-                font-weight: bold;
-            }}
-            .risk-high {{
-                background: #ffe0d4;
-                color: #c0392b;
-            }}
-            .risk-moderate {{
-                background: #fff0d4;
-                color: #e67e22;
-            }}
-            .risk-low {{
-                background: #d4f0e0;
-                color: #2c7a4d;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="title">🔬 LungVision AI</div>
-                <div class="subtitle">Clinical Diagnostic Report | Advanced Pulmonary Pathology System</div>
-                <div class="report-id">Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}</div>
-                <div class="report-id">Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
-            </div>
-            
-            <div class="info-box">
-                <strong>Patient Information</strong><br>
-                Name: CONFIDENTIAL<br>
-                    Medical Record #: {datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}<br>
-                    Referring Physician: AI Clinical System<br>
-                    Specimen Type: Lung Tissue Biopsy
-            </div>
-            
-            <div class="diagnosis-box">
-                <div class="diagnosis">{config['label']}</div>
-                <div>Confidence Level: {confidence:.1f}%</div>
-                <div class="confidence-bar">
-                    <div class="confidence-fill"></div>
-                </div>
-                <div style="margin-top: 10px;">
-                    <span class="risk-tag risk-{config['risk']}">{config['risk_label']}</span>
-                </div>
-            </div>
-            
-            <div class="comparison-section">
-                <h3>🔬 Cellular Comparison Analysis</h3>
-                <div class="comparison-grid">
-                    <div class="comparison-item">
-                        <div class="comparison-label label-healthy">✅ HEALTHY REFERENCE</div>
-                        <img src="data:image/png;base64,{healthy_base64}" class="comparison-image" alt="Healthy Tissue">
-                        <div style="font-size: 11px; color: #7a8e94; margin-top: 10px;">
-                            Normal alveolar architecture<br>
-                            Regular cell morphology
-                        </div>
-                    </div>
-                    <div class="comparison-item">
-                        <div class="comparison-label label-abnormal">⚠️ PATIENT SAMPLE</div>
-                        <img src="data:image/png;base64,{abnormal_base64}" class="comparison-image" alt="Patient Sample">
-                        <div style="font-size: 11px; color: #7a8e94; margin-top: 10px;">
-                            Abnormal cellular patterns<br>
-                            Highlighted regions indicate abnormalities
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="abnormalities-list">
-                <h4>📋 Detected Abnormalities</h4>
-                <ul style="margin: 10px 0; padding-left: 20px;">
-    """
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=26,
+        textColor=primary_color,
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
     
-    for ab in config['abnormalities']:
-        html_content += f"<li>{ab}</li>"
+    header_style = ParagraphStyle(
+        'Header',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#7a9aa3'),
+        alignment=TA_CENTER
+    )
     
-    html_content += f"""
-                </ul>
-            </div>
-            
-            <div class="info-box">
-                <h4>📊 Clinical Staging & Risk Assessment</h4>
-                <table>
-                    <tr><td class="label-cell">TNM Classification:</td><td class="value-cell"><strong>{config['stage']}</strong></td></tr>
-                    <tr><td class="label-cell">Risk Level:</td><td class="value-cell"><span class="risk-tag risk-{config['risk']}">{config['risk_label']}</span></td></tr>
-                    <tr><td class="label-cell">Pathological Finding:</td><td class="value-cell">{config['desc']}</td></tr>
-                </table>
-            </div>
-            
-            <div>
-                <h4>📈 Probability Distribution</h4>
-    """
+    section_style = ParagraphStyle(
+        'Section',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=accent_color,
+        spaceAfter=12,
+        spaceBefore=12
+    )
     
+    # Title
+    story.append(Paragraph("🏥 LungVision AI", title_style))
+    story.append(Paragraph("Clinical Diagnostic Report", header_style))
+    story.append(Paragraph(f"Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}", header_style))
+    story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", header_style))
+    story.append(Spacer(1, 20))
+    
+    # Patient Info
+    patient_data = [
+        ["Patient Name:", "CONFIDENTIAL"],
+        ["Medical Record #:", f"{datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}"],
+        ["Referring Physician:", "AI Clinical System"],
+        ["Specimen Type:", "Lung Tissue Biopsy"]
+    ]
+    patient_table = Table(patient_data, colWidths=[2*inch, 3*inch])
+    patient_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f8fc')),
+        ('TEXTCOLOR', (0, 0), (0, -1), primary_color),
+        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#7a9aa3')),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#c5dce5')),
+    ]))
+    story.append(patient_table)
+    story.append(Spacer(1, 20))
+    
+    # Diagnosis
+    story.append(Paragraph("DIAGNOSTIC FINDINGS", section_style))
+    
+    diagnosis_color = danger_color if config['risk'] == 'high' else warning_color if config['risk'] == 'moderate' else success_color
+    story.append(Paragraph(f"<font color='{diagnosis_color.hexval()}' size='20'><b>{config['label']}</b></font>", styles['Normal']))
+    story.append(Spacer(1, 10))
+    
+    # Confidence
+    story.append(Paragraph(f"Confidence Level: {confidence:.1f}%", styles['Normal']))
+    
+    # Confidence bar
+    conf_bar = Table([[""]], colWidths=[f"{confidence}%"])
+    conf_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), diagnosis_color),
+        ('HEIGHT', (0, 0), (0, 0), 6),
+    ]))
+    story.append(conf_bar)
+    story.append(Spacer(1, 15))
+    
+    # Stage and Risk
+    story.append(Paragraph(f"<b>TNM Classification:</b> {config['stage']}", styles['Normal']))
+    story.append(Paragraph(f"<b>Risk Level:</b> {config['risk_label']}", styles['Normal']))
+    story.append(Paragraph(f"<b>Pathological Finding:</b> {config['desc']}", styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    # Cellular Comparison
+    story.append(Paragraph("CELLULAR COMPARISON ANALYSIS", section_style))
+    
+    temp_dir = tempfile.mkdtemp()
+    healthy_path = os.path.join(temp_dir, 'healthy.png')
+    abnormal_path = os.path.join(temp_dir, 'abnormal.png')
+    
+    healthy_resized = healthy_img.resize((220, 220))
+    abnormal_resized = abnormal_img.resize((220, 220))
+    
+    healthy_resized.save(healthy_path)
+    abnormal_resized.save(abnormal_path)
+    
+    comparison_data = [
+        [Paragraph("<b>✅ HEALTHY REFERENCE</b>", styles['Normal']), 
+         Paragraph("<b>⚠️ PATIENT SAMPLE</b>", styles['Normal'])],
+        [RLImage(healthy_path, width=200, height=200), 
+         RLImage(abnormal_path, width=200, height=200)],
+        [Paragraph("Normal alveolar architecture<br/>Regular cell morphology", styles['Normal']), 
+         Paragraph("Abnormal cellular patterns<br/>Irregular cell morphology", styles['Normal'])]
+    ]
+    
+    comparison_table = Table(comparison_data, colWidths=[2.7*inch, 2.7*inch])
+    comparison_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#cce8d6')),
+        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#ffe0d4')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 1), (-1, 1), 12),
+        ('BOTTOMPADDING', (0, 1), (-1, 1), 12),
+        ('GRID', (0, 2), (-1, 2), 0.5, colors.HexColor('#c5dce5')),
+    ]))
+    story.append(comparison_table)
+    story.append(Spacer(1, 20))
+    
+    # Abnormalities
+    story.append(Paragraph("DETECTED ABNORMALITIES", section_style))
+    for i, ab in enumerate(config['abnormalities'], 1):
+        story.append(Paragraph(f"• {ab}", styles['Normal']))
+    story.append(Spacer(1, 15))
+    
+    # Probability Distribution
+    story.append(Paragraph("PROBABILITY DISTRIBUTION", section_style))
     for i, cls in enumerate(CLASSES):
         c = CLASS_CONFIG[cls]
         prob = float(predictions[0][i]) * 100
-        html_content += f"""
-                <div class="probability-item">
-                    <div class="probability-label">
-                        <span>{c['label']}</span>
-                        <span style="color: {c['color']};">{prob:.1f}%</span>
-                    </div>
-                    <div class="probability-bar">
-                        <div style="width: {prob}%; height: 100%; background: {c['color']};"></div>
-                    </div>
-                </div>
-        """
+        prob_color = colors.HexColor(c['color'])
+        story.append(Paragraph(f"{c['label']}: {prob:.1f}%", styles['Normal']))
+        prob_bar = Table([[""]], colWidths=[f"{prob}%"])
+        prob_bar.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, 0), prob_color),
+            ('HEIGHT', (0, 0), (0, 0), 4),
+        ]))
+        story.append(prob_bar)
+    story.append(Spacer(1, 15))
     
-    html_content += f"""
-            </div>
-            
-            <div class="recommendation-box">
-                <h4>💊 Clinical Recommendation</h4>
-                <p>{config['treatment']}</p>
-            </div>
-            
-            <div class="footer">
-                This report was generated automatically by LungVision AI v3.0<br>
-                For clinical decision support. Must be reviewed by a qualified physician.<br>
-                © 2024 LungVision AI - Advanced Pulmonary Diagnostic System
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+    # Recommendation
+    story.append(Paragraph("CLINICAL RECOMMENDATION", section_style))
+    story.append(Paragraph(config['treatment'], styles['Normal']))
+    story.append(Spacer(1, 20))
     
-    return html_content
+    # Footer
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.HexColor('#7a9aa3'),
+        alignment=TA_CENTER
+    )
+    story.append(Paragraph("This report was generated automatically by LungVision AI v3.0", footer_style))
+    story.append(Paragraph("For clinical decision support. Must be reviewed by a qualified physician.", footer_style))
+    story.append(Paragraph("© 2024 LungVision AI - Advanced Pulmonary Diagnostic System", footer_style))
+    
+    doc.build(story)
+    
+    os.remove(healthy_path)
+    os.remove(abnormal_path)
+    os.rmdir(temp_dir)
+    
+    return buffer.getvalue()
 
 # Initialize session state
 if 'comparison_active' not in st.session_state:
@@ -1002,7 +819,6 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
     
-    # Comparison Mode Selection
     st.markdown("""
     <div class="comparison-mode">
         <div class="comparison-title">
@@ -1013,7 +829,7 @@ with col1:
     
     st.markdown("""
     <div style="margin: 20px 0 15px 0; text-align: center;">
-        <span style="background: #e8f0f3; padding: 5px 20px; border-radius: 20px; font-size: 11px; color: #2c3e42;">
+        <span style="background: #dceaf0; padding: 5px 20px; border-radius: 20px; font-size: 11px; color: #2c5a66;">
             SELECT PATHOLOGY SAMPLE
         </span>
     </div>
@@ -1024,7 +840,7 @@ with col1:
     with col_s1:
         if st.button("🔬 Adenocarcinoma", key="adc", use_container_width=True):
             healthy_img = generate_healthy_reference()
-            abnormal_img, abnormal_highlighted, highlights = generate_abnormal_image("adenocarcinoma", True)
+            abnormal_img, abnormal_highlighted = generate_abnormal_image("adenocarcinoma", True)
             st.session_state.healthy_ref = healthy_img
             st.session_state.abnormal_img = abnormal_img
             st.session_state.abnormal_highlighted = abnormal_highlighted
@@ -1035,7 +851,7 @@ with col1:
     with col_s2:
         if st.button("🔬 Squamous Cell", key="scc", use_container_width=True):
             healthy_img = generate_healthy_reference()
-            abnormal_img, abnormal_highlighted, highlights = generate_abnormal_image("squamous_cell_carcinoma", True)
+            abnormal_img, abnormal_highlighted = generate_abnormal_image("squamous_cell_carcinoma", True)
             st.session_state.healthy_ref = healthy_img
             st.session_state.abnormal_img = abnormal_img
             st.session_state.abnormal_highlighted = abnormal_highlighted
@@ -1046,7 +862,7 @@ with col1:
     with col_s3:
         if st.button("🔬 Benign Tissue", key="ben", use_container_width=True):
             healthy_img = generate_healthy_reference()
-            abnormal_img, abnormal_highlighted, highlights = generate_abnormal_image("benign", True)
+            abnormal_img, abnormal_highlighted = generate_abnormal_image("benign", True)
             st.session_state.healthy_ref = healthy_img
             st.session_state.abnormal_img = abnormal_img
             st.session_state.abnormal_highlighted = abnormal_highlighted
@@ -1054,10 +870,9 @@ with col1:
             st.session_state.comparison_active = True
             st.rerun()
     
-    # Upload Section
     st.markdown("""
     <div style="margin: 20px 0 10px 0; text-align: center;">
-        <span style="background: #e8f0f3; padding: 3px 15px; border-radius: 15px; font-size: 10px; color: #7a8e94;">
+        <span style="background: #dceaf0; padding: 3px 15px; border-radius: 15px; font-size: 10px; color: #7a9aa3;">
             — OR CLINICAL UPLOAD —
         </span>
     </div>
@@ -1079,20 +894,17 @@ with col1:
         st.session_state.comparison_active = True
         st.image(img, caption="Patient Sample", use_container_width=True)
     
-    # Display Comparison
     if st.session_state.comparison_active:
         st.markdown("---")
         st.markdown("### 🔬 Cellular Pathology Comparison")
         
-        comp_container = st.container()
-        with comp_container:
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.image(st.session_state.healthy_ref, caption="Healthy Reference", use_container_width=True)
-                st.markdown('<div style="text-align: center;"><span class="label-healthy">✅ NORMAL TISSUE</span></div>', unsafe_allow_html=True)
-            with col_b:
-                st.image(st.session_state.abnormal_highlighted, caption="Patient Sample", use_container_width=True)
-                st.markdown('<div style="text-align: center;"><span class="label-abnormal">⚠️ ANALYZING</span></div>', unsafe_allow_html=True)
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.image(st.session_state.healthy_ref, caption="Healthy Reference", use_container_width=True)
+            st.markdown('<div style="text-align: center;"><span class="label-healthy">✅ NORMAL TISSUE</span></div>', unsafe_allow_html=True)
+        with col_b:
+            st.image(st.session_state.abnormal_highlighted, caption="Patient Sample", use_container_width=True)
+            st.markdown('<div style="text-align: center;"><span class="label-abnormal">⚠️ ANALYZING</span></div>', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1110,7 +922,7 @@ with col2:
         st.markdown("""
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; gap: 15px; opacity: 0.6;">
             <div style="font-size: 48px;">🏥</div>
-            <p style="font-size: 13px; color: #7a8e94; text-align: center;">
+            <p style="font-size: 13px; color: #7a9aa3; text-align: center;">
                 Select a pathology sample or<br>
                 upload patient image to begin analysis
             </p>
@@ -1118,8 +930,6 @@ with col2:
         """, unsafe_allow_html=True)
     else:
         with st.spinner("Analyzing specimen..."):
-            model = load_model()
-            
             comp_type = st.session_state.comparison_type
             if comp_type == "adenocarcinoma":
                 predictions = np.array([[0.92, 0.03, 0.05]])
@@ -1135,10 +945,10 @@ with col2:
             config = CLASS_CONFIG[pred_class]
             confidence = float(predictions[0][pred_idx]) * 100
         
-        # Display Results
+        # Display Results with consistent colors
         st.markdown(f"""
         <div class="result-card">
-            <div class="result-badge" style="background: rgba({int(config['color'][1:3], 16)},{int(config['color'][3:5], 16)},{int(config['color'][5:7], 16)},0.1); color: {config['color']};">
+            <div class="result-badge" style="background: {config['bg_color']}; color: {config['color']};">
                 PRIMARY DIAGNOSIS
             </div>
             <div class="diagnosis" style="color: {config['color']};">{config['label']}</div>
@@ -1150,19 +960,19 @@ with col2:
         
         <div class="result-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <span style="font-size: 11px; font-weight: 600; color: #7a8e94;">TNM CLASSIFICATION</span>
+                <span style="font-size: 11px; font-weight: 600; color: #7a9aa3;">TNM CLASSIFICATION</span>
                 <span class="risk-{config['risk']}">{config['risk_label']}</span>
             </div>
             <div style="margin-bottom: 10px;">
-                <span style="font-size: 18px; font-weight: 700; color: #2c3e42;">{config['stage']}</span>
+                <span style="font-size: 18px; font-weight: 700; color: #2c5a66;">{config['stage']}</span>
             </div>
-            <div style="font-size: 12px; color: #7a8e94; line-height: 1.5;">
+            <div style="font-size: 12px; color: #7a9aa3; line-height: 1.5;">
                 {config['desc']}
             </div>
         </div>
         
         <div class="result-card">
-            <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: #7a8e94; margin-bottom: 15px;">
+            <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.1em; color: #7a9aa3; margin-bottom: 15px;">
                 PROBABILITY DISTRIBUTION
             </div>
         """, unsafe_allow_html=True)
@@ -1183,22 +993,21 @@ with col2:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Generate and download HTML report (can be saved as PDF via browser)
-        html_report = generate_html_report(
-            st.session_state.healthy_ref,
-            st.session_state.abnormal_highlighted,
-            config,
-            confidence,
-            predictions
-        )
+        # PDF Download
+        if st.button("📑 Generate PDF Clinical Report", use_container_width=True):
+            with st.spinner("Generating PDF report..."):
+                pdf_data = create_pdf_report(
+                    st.session_state.healthy_ref,
+                    st.session_state.abnormal_highlighted,
+                    config,
+                    confidence,
+                    predictions
+                )
+                b64_pdf = base64.b64encode(pdf_data).decode()
+                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf" style="text-decoration: none;"><div class="download-btn">📥 Download PDF Report</div></a>'
+                st.markdown(href, unsafe_allow_html=True)
+                st.success("✅ PDF Report generated successfully!")
         
-        b64_html = base64.b64encode(html_report.encode()).decode()
-        href = f'<a href="data:text/html;base64,{b64_html}" download="LungVision_Clinical_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.html" style="text-decoration: none;"><div class="download-btn">📑 Download Clinical Report (HTML/PDF)</div></a>'
-        st.markdown(href, unsafe_allow_html=True)
-        
-        st.info("💡 **Tip:** The report can be saved as PDF by opening the HTML file and using Ctrl+P → 'Save as PDF'")
-        
-        # Clinical Note
         st.markdown(f"""
         <div class="clinical-card">
             <div style="display: flex; gap: 12px;">
@@ -1207,7 +1016,7 @@ with col2:
                     <div style="font-size: 13px; font-weight: 700; color: {config['color']}; margin-bottom: 5px;">
                         Clinical Recommendation
                     </div>
-                    <div style="font-size: 12px; color: #5a6e74; line-height: 1.5;">
+                    <div style="font-size: 12px; color: #5a7a84; line-height: 1.5;">
                         {config['treatment']}
                     </div>
                 </div>
@@ -1219,7 +1028,6 @@ with col2:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Footer
 st.markdown("""
 <div class="footer">
     <div class="footer-text">LungVision AI · Clinical Diagnostic System · CE-IVD Certified</div>
