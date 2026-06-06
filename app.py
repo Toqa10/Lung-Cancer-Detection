@@ -7,12 +7,7 @@ import os
 from datetime import datetime
 import json
 import random
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from fpdf import FPDF
 import tempfile
 
 st.set_page_config(
@@ -52,7 +47,6 @@ st.markdown("""
     max-width: 100% !important;
 }
 
-/* Hero Section - Medical Style */
 .hero {
     background: linear-gradient(135deg, #1a3a40 0%, #0d2a30 100%);
     padding: 50px 60px 40px;
@@ -100,7 +94,6 @@ h1 {
 }
 
 h1 span {
-    color: #7ec8e0;
     background: linear-gradient(135deg, #7ec8e0, #5a9bb3);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -137,7 +130,6 @@ h1 span {
     letter-spacing: 0.08em;
 }
 
-/* Main Grid */
 .main-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -175,16 +167,12 @@ h1 span {
     font-size: 24px;
 }
 
-/* Card Styles */
 .clinical-card {
     background: linear-gradient(135deg, #f0f8fc 0%, #e8f4f8 100%);
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
     border-left: 4px solid #7ec8e0;
-    border-right: 1px solid #d0e8f0;
-    border-top: 1px solid #d0e8f0;
-    border-bottom: 1px solid #d0e8f0;
 }
 
 .comparison-mode {
@@ -415,25 +403,6 @@ h1 span {
     box-shadow: 0 6px 20px rgba(45, 106, 79, 0.3);
 }
 
-.sample-btn {
-    background: linear-gradient(135deg, #5a9bb3, #4a8aa2);
-    color: white;
-    border: none;
-    padding: 12px;
-    border-radius: 12px;
-    font-weight: 600;
-    font-size: 13px;
-    transition: all 0.3s;
-    width: 100%;
-    cursor: pointer;
-    text-align: center;
-}
-
-.sample-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(90, 155, 179, 0.3);
-}
-
 .stButton > button {
     background: linear-gradient(135deg, #5a9bb3, #4a8aa2);
     color: white;
@@ -461,11 +430,6 @@ h1 span {
     font-size: 10px;
     color: #7a9aa3;
     letter-spacing: 0.05em;
-}
-
-.compare-img {
-    border-radius: 12px;
-    border: 2px solid #7ec8e0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -619,186 +583,189 @@ def generate_abnormal_image(case_type, highlight_regions=True):
     
     return img, highlighted_img
 
+class PDFReport(FPDF):
+    def header(self):
+        # Logo and title
+        self.set_font('helvetica', 'B', 16)
+        self.set_text_color(44, 90, 102)
+        self.cell(0, 10, 'LungVision AI', 0, 1, 'C')
+        self.set_font('helvetica', '', 9)
+        self.set_text_color(122, 154, 163)
+        self.cell(0, 5, 'Clinical Diagnostic Report', 0, 1, 'C')
+        self.ln(5)
+    
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('helvetica', 'I', 8)
+        self.set_text_color(122, 154, 163)
+        self.cell(0, 10, f'Page {self.page_no()} - For Clinical Use Only', 0, 0, 'C')
+
 def create_pdf_report(healthy_img, abnormal_img, config, confidence, predictions):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, 
-                           rightMargin=72, leftMargin=72,
-                           topMargin=72, bottomMargin=72)
+    pdf = PDFReport()
+    pdf.add_page()
     
-    styles = getSampleStyleSheet()
-    story = []
+    # Report ID and Date
+    pdf.set_font('helvetica', '', 9)
+    pdf.set_text_color(122, 154, 163)
+    pdf.cell(0, 5, f"Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}", 0, 1)
+    pdf.cell(0, 5, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1)
+    pdf.ln(8)
     
-    # Colors
-    primary_color = colors.HexColor('#2c5a66')
-    accent_color = colors.HexColor('#5a9bb3')
-    success_color = colors.HexColor('#2d6a4f')
-    warning_color = colors.HexColor('#e67e22')
-    danger_color = colors.HexColor('#c0392b')
+    # Patient Information
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_text_color(44, 90, 102)
+    pdf.cell(0, 8, 'Patient Information', 0, 1)
+    pdf.set_draw_color(126, 200, 224)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
     
-    # Custom styles
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=26,
-        textColor=primary_color,
-        alignment=TA_CENTER,
-        spaceAfter=20
-    )
+    pdf.set_font('helvetica', '', 10)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(50, 7, 'Patient Name:', 0, 0)
+    pdf.cell(0, 7, 'CONFIDENTIAL', 0, 1)
+    pdf.cell(50, 7, 'Medical Record #:', 0, 0)
+    pdf.cell(0, 7, f"{datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}", 0, 1)
+    pdf.cell(50, 7, 'Referring Physician:', 0, 0)
+    pdf.cell(0, 7, 'AI Clinical System', 0, 1)
+    pdf.cell(50, 7, 'Specimen Type:', 0, 0)
+    pdf.cell(0, 7, 'Lung Tissue Biopsy', 0, 1)
+    pdf.ln(8)
     
-    header_style = ParagraphStyle(
-        'Header',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#7a9aa3'),
-        alignment=TA_CENTER
-    )
+    # Diagnosis Section
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_text_color(44, 90, 102)
+    pdf.cell(0, 8, 'Diagnostic Findings', 0, 1)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
     
-    section_style = ParagraphStyle(
-        'Section',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=accent_color,
-        spaceAfter=12,
-        spaceBefore=12
-    )
+    # Diagnosis with color
+    pdf.set_font('helvetica', 'B', 14)
+    if config['risk'] == 'high':
+        pdf.set_text_color(192, 57, 43)
+    elif config['risk'] == 'moderate':
+        pdf.set_text_color(230, 126, 34)
+    else:
+        pdf.set_text_color(45, 106, 79)
+    pdf.cell(0, 8, config['label'], 0, 1)
     
-    # Title
-    story.append(Paragraph("🏥 LungVision AI", title_style))
-    story.append(Paragraph("Clinical Diagnostic Report", header_style))
-    story.append(Paragraph(f"Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}", header_style))
-    story.append(Paragraph(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", header_style))
-    story.append(Spacer(1, 20))
+    pdf.set_font('helvetica', '', 10)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(0, 6, f'Confidence Level: {confidence:.1f}%', 0, 1)
     
-    # Patient Info
-    patient_data = [
-        ["Patient Name:", "CONFIDENTIAL"],
-        ["Medical Record #:", f"{datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}"],
-        ["Referring Physician:", "AI Clinical System"],
-        ["Specimen Type:", "Lung Tissue Biopsy"]
-    ]
-    patient_table = Table(patient_data, colWidths=[2*inch, 3*inch])
-    patient_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f8fc')),
-        ('TEXTCOLOR', (0, 0), (0, -1), primary_color),
-        ('TEXTCOLOR', (1, 0), (1, -1), colors.HexColor('#7a9aa3')),
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING', (0, 0), (-1, -1), 8),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#c5dce5')),
-    ]))
-    story.append(patient_table)
-    story.append(Spacer(1, 20))
+    # Confidence bar simulation
+    pdf.set_fill_color(200, 220, 230)
+    pdf.rect(10, pdf.get_y(), 100, 4, 'F')
+    if config['risk'] == 'high':
+        pdf.set_fill_color(192, 57, 43)
+    elif config['risk'] == 'moderate':
+        pdf.set_fill_color(230, 126, 34)
+    else:
+        pdf.set_fill_color(45, 106, 79)
+    pdf.rect(10, pdf.get_y(), confidence, 4, 'F')
+    pdf.ln(10)
     
-    # Diagnosis
-    story.append(Paragraph("DIAGNOSTIC FINDINGS", section_style))
-    
-    diagnosis_color = danger_color if config['risk'] == 'high' else warning_color if config['risk'] == 'moderate' else success_color
-    story.append(Paragraph(f"<font color='{diagnosis_color.hexval()}' size='20'><b>{config['label']}</b></font>", styles['Normal']))
-    story.append(Spacer(1, 10))
-    
-    # Confidence
-    story.append(Paragraph(f"Confidence Level: {confidence:.1f}%", styles['Normal']))
-    
-    # Confidence bar
-    conf_bar = Table([[""]], colWidths=[f"{confidence}%"])
-    conf_bar.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), diagnosis_color),
-        ('HEIGHT', (0, 0), (0, 0), 6),
-    ]))
-    story.append(conf_bar)
-    story.append(Spacer(1, 15))
-    
-    # Stage and Risk
-    story.append(Paragraph(f"<b>TNM Classification:</b> {config['stage']}", styles['Normal']))
-    story.append(Paragraph(f"<b>Risk Level:</b> {config['risk_label']}", styles['Normal']))
-    story.append(Paragraph(f"<b>Pathological Finding:</b> {config['desc']}", styles['Normal']))
-    story.append(Spacer(1, 20))
+    pdf.set_font('helvetica', 'B', 10)
+    pdf.cell(50, 6, 'TNM Classification:', 0, 0)
+    pdf.set_font('helvetica', '', 10)
+    pdf.cell(0, 6, config['stage'], 0, 1)
+    pdf.set_font('helvetica', 'B', 10)
+    pdf.cell(50, 6, 'Risk Level:', 0, 0)
+    pdf.set_font('helvetica', '', 10)
+    pdf.cell(0, 6, config['risk_label'], 0, 1)
+    pdf.set_font('helvetica', 'B', 10)
+    pdf.cell(50, 6, 'Pathological Finding:', 0, 0)
+    pdf.set_font('helvetica', '', 10)
+    pdf.cell(0, 6, config['desc'], 0, 1)
+    pdf.ln(8)
     
     # Cellular Comparison
-    story.append(Paragraph("CELLULAR COMPARISON ANALYSIS", section_style))
+    pdf.add_page()
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.set_text_color(44, 90, 102)
+    pdf.cell(0, 8, 'Cellular Comparison Analysis', 0, 1)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(6)
     
+    # Save images
     temp_dir = tempfile.mkdtemp()
     healthy_path = os.path.join(temp_dir, 'healthy.png')
     abnormal_path = os.path.join(temp_dir, 'abnormal.png')
     
-    healthy_resized = healthy_img.resize((220, 220))
-    abnormal_resized = abnormal_img.resize((220, 220))
+    healthy_resized = healthy_img.resize((150, 150))
+    abnormal_resized = abnormal_img.resize((150, 150))
     
     healthy_resized.save(healthy_path)
     abnormal_resized.save(abnormal_path)
     
-    comparison_data = [
-        [Paragraph("<b>✅ HEALTHY REFERENCE</b>", styles['Normal']), 
-         Paragraph("<b>⚠️ PATIENT SAMPLE</b>", styles['Normal'])],
-        [RLImage(healthy_path, width=200, height=200), 
-         RLImage(abnormal_path, width=200, height=200)],
-        [Paragraph("Normal alveolar architecture<br/>Regular cell morphology", styles['Normal']), 
-         Paragraph("Abnormal cellular patterns<br/>Irregular cell morphology", styles['Normal'])]
-    ]
+    # Add images side by side
+    pdf.image(healthy_path, 30, pdf.get_y(), width=65)
+    pdf.image(abnormal_path, 105, pdf.get_y(), width=65)
+    pdf.set_y(pdf.get_y() + 85)
     
-    comparison_table = Table(comparison_data, colWidths=[2.7*inch, 2.7*inch])
-    comparison_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#cce8d6')),
-        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#ffe0d4')),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('TOPPADDING', (0, 1), (-1, 1), 12),
-        ('BOTTOMPADDING', (0, 1), (-1, 1), 12),
-        ('GRID', (0, 2), (-1, 2), 0.5, colors.HexColor('#c5dce5')),
-    ]))
-    story.append(comparison_table)
-    story.append(Spacer(1, 20))
+    pdf.set_font('helvetica', 'B', 9)
+    pdf.set_text_color(45, 106, 79)
+    pdf.cell(80, 6, 'Healthy Reference', 0, 0, 'C')
+    pdf.set_text_color(192, 57, 43)
+    pdf.cell(80, 6, 'Patient Sample', 0, 1, 'C')
+    pdf.ln(8)
     
     # Abnormalities
-    story.append(Paragraph("DETECTED ABNORMALITIES", section_style))
+    pdf.set_font('helvetica', 'B', 10)
+    pdf.set_text_color(44, 90, 102)
+    pdf.cell(0, 6, 'Detected Abnormalities:', 0, 1)
+    pdf.set_font('helvetica', '', 9)
+    pdf.set_text_color(80, 80, 80)
     for i, ab in enumerate(config['abnormalities'], 1):
-        story.append(Paragraph(f"• {ab}", styles['Normal']))
-    story.append(Spacer(1, 15))
+        pdf.cell(10, 6, f'{i}.', 0, 0)
+        pdf.cell(0, 6, ab, 0, 1)
+    pdf.ln(8)
     
     # Probability Distribution
-    story.append(Paragraph("PROBABILITY DISTRIBUTION", section_style))
+    pdf.set_font('helvetica', 'B', 10)
+    pdf.set_text_color(44, 90, 102)
+    pdf.cell(0, 6, 'Probability Distribution', 0, 1)
+    
     for i, cls in enumerate(CLASSES):
         c = CLASS_CONFIG[cls]
         prob = float(predictions[0][i]) * 100
-        prob_color = colors.HexColor(c['color'])
-        story.append(Paragraph(f"{c['label']}: {prob:.1f}%", styles['Normal']))
-        prob_bar = Table([[""]], colWidths=[f"{prob}%"])
-        prob_bar.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, 0), prob_color),
-            ('HEIGHT', (0, 0), (0, 0), 4),
-        ]))
-        story.append(prob_bar)
-    story.append(Spacer(1, 15))
+        pdf.set_font('helvetica', '', 9)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(60, 6, c['label'], 0, 0)
+        pdf.cell(30, 6, f'{prob:.1f}%', 0, 0)
+        
+        # Color bar
+        if c['risk'] == 'high':
+            pdf.set_fill_color(192, 57, 43)
+        elif c['risk'] == 'moderate':
+            pdf.set_fill_color(230, 126, 34)
+        else:
+            pdf.set_fill_color(45, 106, 79)
+        pdf.rect(100, pdf.get_y(), prob/2, 4, 'F')
+        pdf.ln(8)
+    pdf.ln(4)
     
-    # Recommendation
-    story.append(Paragraph("CLINICAL RECOMMENDATION", section_style))
-    story.append(Paragraph(config['treatment'], styles['Normal']))
-    story.append(Spacer(1, 20))
+    # Clinical Recommendation
+    pdf.set_font('helvetica', 'B', 10)
+    pdf.set_text_color(44, 90, 102)
+    pdf.cell(0, 6, 'Clinical Recommendation', 0, 1)
+    pdf.set_font('helvetica', '', 9)
+    pdf.set_text_color(80, 80, 80)
+    pdf.multi_cell(0, 5, config['treatment'])
+    pdf.ln(8)
     
     # Footer
-    footer_style = ParagraphStyle(
-        'Footer',
-        parent=styles['Normal'],
-        fontSize=8,
-        textColor=colors.HexColor('#7a9aa3'),
-        alignment=TA_CENTER
-    )
-    story.append(Paragraph("This report was generated automatically by LungVision AI v3.0", footer_style))
-    story.append(Paragraph("For clinical decision support. Must be reviewed by a qualified physician.", footer_style))
-    story.append(Paragraph("© 2024 LungVision AI - Advanced Pulmonary Diagnostic System", footer_style))
+    pdf.set_font('helvetica', 'I', 8)
+    pdf.set_text_color(122, 154, 163)
+    pdf.cell(0, 5, 'This report was generated automatically by LungVision AI v3.0', 0, 1, 'C')
+    pdf.cell(0, 5, 'For clinical decision support. Must be reviewed by a qualified physician.', 0, 1, 'C')
+    pdf.cell(0, 5, '© 2024 LungVision AI - Advanced Pulmonary Diagnostic System', 0, 1, 'C')
     
-    doc.build(story)
-    
+    # Cleanup
     os.remove(healthy_path)
     os.remove(abnormal_path)
     os.rmdir(temp_dir)
     
-    return buffer.getvalue()
+    return pdf.output(dest='S')
 
 # Initialize session state
 if 'comparison_active' not in st.session_state:
@@ -943,9 +910,7 @@ with col2:
             pred_idx = np.argmax(predictions)
             pred_class = CLASSES[pred_idx]
             config = CLASS_CONFIG[pred_class]
-            confidence = float(predictions[0][pred_idx]) * 100
-        
-        # Display Results with consistent colors
+            confidence = float(predictions[0][pred_idx]) * 100        
         st.markdown(f"""
         <div class="result-card">
             <div class="result-badge" style="background: {config['bg_color']}; color: {config['color']};">
