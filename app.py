@@ -6,6 +6,10 @@ import io
 import os
 from datetime import datetime
 import json
+import fitz  # PyMuPDF لقراءة PDF
+import pydicom  # لقراءة ملفات DICOM الطبية
+import cv2
+from io import BytesIO
 
 st.set_page_config(
     page_title="LungVision AI",
@@ -14,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# تصميم CSS احترافي وجذاب
+# تصميم CSS احترافي وجذاب (نفس التصميم السابق مع تعديلات)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -159,11 +163,11 @@ h1 {
     font-size: 20px;
 }
 
-/* Upload Area */
+/* Upload Area - Multi Format */
 .upload-box {
     border: 2px dashed rgba(255,255,255,0.1);
     border-radius: 20px;
-    padding: 60px 20px;
+    padding: 40px 20px;
     text-align: center;
     transition: all 0.3s;
     background: rgba(255,255,255,0.02);
@@ -189,6 +193,23 @@ h1 {
 .upload-hint {
     font-size: 12px;
     color: rgba(255,255,255,0.25);
+}
+
+.format-badges {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 15px;
+    flex-wrap: wrap;
+}
+
+.format-badge {
+    background: rgba(255,255,255,0.05);
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.4);
+    font-family: monospace;
 }
 
 /* Result Card */
@@ -298,6 +319,20 @@ h1 {
     color: #00c878;
 }
 
+/* File Info */
+.file-info {
+    background: rgba(0, 200, 120, 0.05);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 15px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
 /* Button */
 .download-btn {
     display: inline-flex;
@@ -314,6 +349,7 @@ h1 {
     transition: transform 0.2s, box-shadow 0.2s;
     width: 100%;
     justify-content: center;
+    text-decoration: none;
 }
 
 .download-btn:hover {
@@ -350,6 +386,10 @@ h1 {
     padding: 40px !important;
 }
 
+[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: rgba(0, 200, 120, 0.4) !important;
+}
+
 [data-testid="stImage"] img {
     border-radius: 16px !important;
     border: 1px solid rgba(255,255,255,0.08) !important;
@@ -366,18 +406,18 @@ st.markdown("""
 <div class="hero">
     <div class="badge">
         <div class="badge-dot"></div>
-        <span class="badge-text">AI-Powered Diagnostics</span>
+        <span class="badge-text">AI-Powered Diagnostics · Multi-Format Support</span>
     </div>
     <h1>LungVision AI</h1>
-    <p class="subtitle">Advanced deep learning system for lung cancer detection<br>with staging and risk assessment</p>
+    <p class="subtitle">Advanced deep learning system for lung cancer detection<br>Supporting Medical Images, PDFs & DICOM</p>
     <div class="stats">
         <div class="stat-item">
             <div class="stat-value">98.5%</div>
             <div class="stat-label">Accuracy</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">3 Classes</div>
-            <div class="stat-label">Classification</div>
+            <div class="stat-value">4 Formats</div>
+            <div class="stat-label">Supported</div>
         </div>
         <div class="stat-item">
             <div class="stat-value">TNM</div>
@@ -386,6 +426,49 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Functions to extract images from different formats
+def extract_images_from_pdf(pdf_file):
+    """استخراج الصور من ملف PDF"""
+    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    images = []
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        img_data = pix.tobytes("png")
+        img = Image.open(io.BytesIO(img_data))
+        images.append(img)
+    doc.close()
+    return images
+
+def extract_from_dicom(dicom_file):
+    """استخراج الصورة من ملف DICOM"""
+    ds = pydicom.dcmread(dicom_file)
+    pixel_array = ds.pixel_array
+    if len(pixel_array.shape) == 2:
+        pixel_array = np.stack([pixel_array] * 3, axis=-1)
+    elif len(pixel_array.shape) == 3 and pixel_array.shape[2] == 1:
+        pixel_array = np.concatenate([pixel_array] * 3, axis=-1)
+    pixel_array = ((pixel_array - pixel_array.min()) / (pixel_array.max() - pixel_array.min()) * 255).astype(np.uint8)
+    return Image.fromarray(pixel_array)
+
+def process_uploaded_file(uploaded_file):
+    """معالجة الملف المرفق واستخراج الصور"""
+    file_type = uploaded_file.type
+    file_name = uploaded_file.name
+    images = []
+    
+    if file_type in ["image/jpeg", "image/jpg", "image/png", "image/webp"]:
+        img = Image.open(uploaded_file).convert("RGB")
+        images.append(img)
+        
+    elif file_type == "application/pdf":
+        images = extract_images_from_pdf(uploaded_file)
+        
+    elif file_type == "application/dicom" or file_name.lower().endswith('.dcm'):
+        images.append(extract_from_dicom(uploaded_file))
+    
+    return images, file_type, file_name
 
 # Load Model
 @st.cache_resource
@@ -437,30 +520,75 @@ with col1:
     st.markdown("""
     <div class="panel">
         <div class="panel-header">
-            <div class="panel-title">UPLOAD IMAGE</div>
-            <div class="panel-icon">📷</div>
+            <div class="panel-title">UPLOAD FILE</div>
+            <div class="panel-icon">📂</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Custom upload area with format badges
+    st.markdown("""
+    <div class="upload-box">
+        <div class="upload-icon">🔬</div>
+        <div class="upload-title">Drop your medical file here</div>
+        <div class="upload-hint">Multi-format support for medical imaging</div>
+        <div class="format-badges">
+            <span class="format-badge">📷 JPG/PNG</span>
+            <span class="format-badge">📄 PDF</span>
+            <span class="format-badge">🏥 DICOM</span>
+            <span class="format-badge">🌐 WEBP</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader(
-        "Upload histopathological image",
-        type=["jpg", "jpeg", "png", "webp"],
+        "Upload medical image or document",
+        type=["jpg", "jpeg", "png", "webp", "pdf", "dcm"],
         label_visibility="collapsed",
         key="upload"
     )
     
     if uploaded_file:
-        img = Image.open(uploaded_file).convert("RGB")
-        st.image(img, use_container_width=True)
-    else:
-        st.markdown("""
-        <div class="upload-box">
-            <div class="upload-icon">🔬</div>
-            <div class="upload-title">Drop your slide here</div>
-            <div class="upload-hint">JPG, PNG, WEBP supported</div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Process the uploaded file
+        images, file_type, file_name = process_uploaded_file(uploaded_file)
+        
+        if images:
+            st.session_state['extracted_images'] = images
+            st.session_state['current_image_index'] = 0
+            st.session_state['total_images'] = len(images)
+            st.session_state['file_name'] = file_name
+            st.session_state['file_type'] = file_type
+            
+            # Show file info
+            st.markdown(f"""
+            <div class="file-info">
+                <span>📄 {file_name}</span>
+                <span>🔧 {file_type}</span>
+                <span>🖼️ {len(images)} frame(s)</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show image navigation if multiple images
+            if len(images) > 1:
+                col_prev, col_idx, col_next = st.columns([1, 2, 1])
+                with col_prev:
+                    if st.button("◀ Previous", use_container_width=True):
+                        if st.session_state.current_image_index > 0:
+                            st.session_state.current_image_index -= 1
+                            st.rerun()
+                with col_idx:
+                    st.markdown(f"<div style='text-align: center; padding: 8px; color: rgba(255,255,255,0.5);'>Image {st.session_state.current_image_index + 1} of {st.session_state.total_images}</div>", unsafe_allow_html=True)
+                with col_next:
+                    if st.button("Next ▶", use_container_width=True):
+                        if st.session_state.current_image_index < st.session_state.total_images - 1:
+                            st.session_state.current_image_index += 1
+                            st.rerun()
+            
+            # Display current image
+            current_img = images[st.session_state.current_image_index]
+            st.image(current_img, use_container_width=True)
+        else:
+            st.error("Could not extract images from the uploaded file. Please try another file.")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -478,13 +606,14 @@ with col2:
         st.markdown("""
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; gap: 15px; opacity: 0.4;">
             <div style="font-size: 50px;">🧬</div>
-            <p style="font-size: 13px; color: rgba(255,255,255,0.5); text-align: center;">Awaiting image upload<br>System ready</p>
+            <p style="font-size: 13px; color: rgba(255,255,255,0.5); text-align: center;">Upload an image or PDF to begin analysis<br>Supporting JPEG, PNG, PDF, DICOM</p>
         </div>
         """, unsafe_allow_html=True)
-    else:
+    elif 'extracted_images' in st.session_state and st.session_state.extracted_images:
         with st.spinner("Analyzing tissue sample..."):
             model = load_model()
-            img_resized = img.resize((224, 224))
+            current_img = st.session_state.extracted_images[st.session_state.current_image_index]
+            img_resized = current_img.resize((224, 224))
             img_array = np.array(img_resized).astype("float32") / 255.0
             img_array = np.expand_dims(img_array, axis=0)
             predictions = model.predict(img_array, verbose=0)
@@ -501,6 +630,7 @@ with col2:
         st.session_state['stage'] = config['stage']
         st.session_state['desc'] = config['desc']
         st.session_state['predictions'] = predictions[0]
+        st.session_state['file_info'] = f"{st.session_state.file_name} (Frame {st.session_state.current_image_index + 1})"
         
         # Risk badge class
         risk_class = f"risk-{config['risk']}"
@@ -633,6 +763,14 @@ with col2:
                         color: rgba(255,255,255,0.4);
                         font-size: 12px;
                     }}
+                    .file-info {{
+                        background: rgba(0,200,120,0.1);
+                        padding: 10px;
+                        border-radius: 10px;
+                        margin: 15px 0;
+                        font-size: 12px;
+                        text-align: center;
+                    }}
                     .section {{
                         margin: 25px 0;
                         padding: 20px;
@@ -707,6 +845,10 @@ with col2:
                         <div class="date">Clinical Diagnostic Report · {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
                     </div>
                     
+                    <div class="file-info">
+                        📄 Source: {st.session_state.get('file_info', 'Unknown')}
+                    </div>
+                    
                     <div class="section">
                         <div class="section-title">DIAGNOSIS SUMMARY</div>
                         <div class="diagnosis-value">{config['label']}</div>
@@ -778,6 +920,6 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("""
 <div class="footer">
     <div class="footer-text">LungVision AI · Advanced Lung Cancer Detection System</div>
-    <div class="footer-text">Powered by Deep Learning · For Clinical Decision Support</div>
+    <div class="footer-text">Multi-Format Support: JPEG, PNG, PDF, DICOM · Powered by Deep Learning</div>
 </div>
 """, unsafe_allow_html=True)
