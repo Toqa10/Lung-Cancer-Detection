@@ -8,24 +8,16 @@ from datetime import datetime
 import json
 import random
 import pandas as pd
-from reportlab.lib.pagesizes import A4, letter
-from reportlab.lib.units import mm, cm, inch
-from reportlab.pdfgen import canvas
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.utils import ImageReader
-from reportlab.lib.colors import HexColor, white, black
-import tempfile
 
 st.set_page_config(
-    page_title="LungVision AI Pro - Clinical System",
+    page_title="LungVision AI - Clinical System",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
 # ============================================
-# CSS DESIGN - BABY BLUE MEDICAL THEME
+# CSS DESIGN
 # ============================================
 st.markdown("""
 <style>
@@ -494,6 +486,18 @@ h1 span {
     justify-content: space-between;
     align-items: center;
 }
+
+/* Print styles */
+@media print {
+    .stApp, .stButton, .stTabs, .panel-header, .footer, .download-btn, .btn-secondary {
+        display: none !important;
+    }
+    .main-grid, .panel, .result-card, .clinical-card {
+        display: block !important;
+        background: white !important;
+        box-shadow: none !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -506,8 +510,8 @@ st.markdown("""
         <div class="badge-dot"></div>
         <span class="badge-text">CLINICAL DIAGNOSTIC SYSTEM · CE-IVD CERTIFIED</span>
     </div>
-    <h1>LungVision <span>AI Pro</span></h1>
-    <p class="subtitle">Complete pulmonary pathology system with batch analysis, heatmap visualization,<br>reference library, and PDF export</p>
+    <h1>LungVision <span>AI</span></h1>
+    <p class="subtitle">Advanced pulmonary pathology system with cellular comparison,<br>heatmap visualization, and clinical reporting</p>
     <div class="stats">
         <div class="stat-item">
             <div class="stat-value">98.5%</div>
@@ -518,12 +522,12 @@ st.markdown("""
             <div class="stat-label">Certified</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">PDF</div>
-            <div class="stat-label">Direct Export</div>
+            <div class="stat-value">3</div>
+            <div class="stat-label">Classes</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">Real-time</div>
-            <div class="stat-label">Heatmap</div>
+            <div class="stat-value">TNM</div>
+            <div class="stat-label">Staging</div>
         </div>
     </div>
 </div>
@@ -603,32 +607,27 @@ REFERENCE_LIBRARY = {
     "Adenocarcinoma": {
         "desc": "Most common type of lung cancer (40%). Originates from glandular cells.",
         "characteristics": "Glandular formation, mucin production, irregular nuclei",
-        "key_features": ["Glandular structures", "Mucin production", "Nuclear atypia"],
-        "treatment": "Surgical resection, chemotherapy, targeted therapy"
+        "key_features": ["Glandular structures", "Mucin production", "Nuclear atypia"]
     },
     "Squamous Cell Carcinoma": {
         "desc": "Second most common (25-30%). Associated with smoking.",
         "characteristics": "Keratin pearls, intercellular bridges, pleomorphic cells",
-        "key_features": ["Keratinization", "Intercellular bridges", "Necrosis"],
-        "treatment": "Surgery, radiation, immunotherapy"
+        "key_features": ["Keratinization", "Intercellular bridges", "Necrosis"]
     },
     "Benign": {
         "desc": "Normal lung tissue or benign lesions",
         "characteristics": "Organized architecture, regular nuclei, no atypia",
-        "key_features": ["Normal anatomy", "Regular cells", "No malignancy"],
-        "treatment": "Observation, regular follow-up"
+        "key_features": ["Normal anatomy", "Regular cells", "No malignancy"]
     },
     "Small Cell Carcinoma": {
         "desc": "Highly aggressive (15%). Strongly associated with smoking.",
         "characteristics": "Small cells, scant cytoplasm, nuclear molding",
-        "key_features": ["Nuclear molding", "High mitotic rate", "Neuroendocrine features"],
-        "treatment": "Chemotherapy, radiation, immunotherapy"
+        "key_features": ["Nuclear molding", "High mitotic rate", "Neuroendocrine features"]
     },
     "Large Cell Carcinoma": {
         "desc": "Undifferentiated non-small cell carcinoma (5-10%)",
         "characteristics": "Large cells, prominent nucleoli, abundant cytoplasm",
-        "key_features": ["Large pleomorphic cells", "Vesicular nuclei", "No differentiation"],
-        "treatment": "Surgery, chemotherapy, targeted therapy"
+        "key_features": ["Large pleomorphic cells", "Vesicular nuclei", "No differentiation"]
     }
 }
 
@@ -720,240 +719,189 @@ def generate_heatmap(positions, img_size=(400, 400)):
     return Image.fromarray(heatmap_rgb, mode='RGB')
 
 # ============================================
-# PDF GENERATION WITH REPORTLAB
+# REPORT GENERATION
 # ============================================
-def create_pdf_report(healthy_img, abnormal_img, config, confidence, predictions, heatmap_img=None):
-    """Create professional PDF report using reportlab"""
+def create_html_report(healthy_img, abnormal_img, config, confidence, predictions, heatmap_img=None):
+    """Create HTML report that can be printed as PDF"""
     
-    temp_dir = tempfile.mkdtemp()
-    healthy_path = os.path.join(temp_dir, 'healthy.png')
-    abnormal_path = os.path.join(temp_dir, 'abnormal.png')
+    # Convert images to base64
+    healthy_buffer = io.BytesIO()
+    healthy_img.save(healthy_buffer, format='PNG')
+    healthy_base64 = base64.b64encode(healthy_buffer.getvalue()).decode()
     
-    healthy_resized = healthy_img.resize((150, 150))
-    abnormal_resized = abnormal_img.resize((150, 150))
-    healthy_resized.save(healthy_path)
-    abnormal_resized.save(abnormal_path)
+    abnormal_buffer = io.BytesIO()
+    abnormal_img.save(abnormal_buffer, format='PNG')
+    abnormal_base64 = base64.b64encode(abnormal_buffer.getvalue()).decode()
     
-    heatmap_path = None
+    heatmap_html = ""
     if heatmap_img:
-        heatmap_path = os.path.join(temp_dir, 'heatmap.png')
-        heatmap_resized = heatmap_img.resize((150, 150))
-        heatmap_resized.save(heatmap_path)
+        heatmap_buffer = io.BytesIO()
+        heatmap_img.save(heatmap_buffer, format='PNG')
+        heatmap_base64 = base64.b64encode(heatmap_buffer.getvalue()).decode()
+        heatmap_html = f"""
+        <div style="flex:1; text-align:center; border:1px solid #d0e8f0; border-radius:12px; padding:15px; background:#fafefe;">
+            <div style="background:#7ec8e0; color:white; padding:5px 10px; border-radius:20px; display:inline-block; font-size:12px; font-weight:bold;">🔥 AI HEATMAP</div>
+            <img src="data:image/png;base64,{heatmap_base64}" style="width:180px; height:180px; border-radius:8px; margin:10px;">
+            <div style="font-size:11px; color:#7a9aa3;">Red areas indicate high suspicion</div>
+        </div>
+        """
     
-    pdf_buffer = io.BytesIO()
-    c = canvas.Canvas(pdf_buffer, pagesize=A4)
-    width, height = A4
-    
-    # Colors
+    # Risk colors
     if config['risk'] == 'high':
-        main_color = HexColor('#c0392b')
-        bg_color = HexColor('#ffe0d4')
+        risk_color = "#c0392b"
+        risk_bg = "#ffe0d4"
     elif config['risk'] == 'moderate':
-        main_color = HexColor('#e67e22')
-        bg_color = HexColor('#fff0d4')
+        risk_color = "#e67e22"
+        risk_bg = "#fff0d4"
     else:
-        main_color = HexColor('#2d6a4f')
-        bg_color = HexColor('#cce8d6')
+        risk_color = "#2d6a4f"
+        risk_bg = "#cce8d6"
     
-    baby_blue = HexColor('#7ec8e0')
-    dark_blue = HexColor('#2c5a66')
-    
-    # Header
-    c.setFont("Helvetica-Bold", 22)
-    c.setFillColor(dark_blue)
-    c.drawString(50, height - 50, "LungVision AI Pro")
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(HexColor('#7a9aa3'))
-    c.drawString(50, height - 70, "Clinical Diagnostic Report")
-    
-    # Report ID and Date
-    c.setFont("Helvetica", 9)
-    c.drawString(50, height - 90, f"Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}")
-    c.drawString(50, height - 105, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    # Line
-    c.setStrokeColor(baby_blue)
-    c.setLineWidth(2)
-    c.line(50, height - 115, width - 50, height - 115)
-    
-    y = height - 145
-    
-    # Patient Info
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(dark_blue)
-    c.drawString(50, y, "Patient Information")
-    y -= 20
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(black)
-    c.drawString(50, y, "Patient Name: CONFIDENTIAL")
-    y -= 15
-    c.drawString(50, y, f"Medical Record #: {datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}")
-    y -= 15
-    c.drawString(50, y, "Referring Physician: AI Clinical System")
-    y -= 15
-    c.drawString(50, y, "Specimen Type: Lung Tissue Biopsy")
-    y -= 25
-    
-    # Diagnosis Box
-    c.setFillColor(bg_color)
-    c.roundRect(50, y - 80, width - 100, 90, 10, fill=1, stroke=0)
-    
-    c.setFont("Helvetica-Bold", 20)
-    c.setFillColor(main_color)
-    c.drawCentredString(width / 2, y - 35, config['label'])
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(black)
-    c.drawCentredString(width / 2, y - 55, f"Confidence Level: {confidence:.1f}%")
-    
-    # Confidence bar
-    c.setFillColor(HexColor('#e0eef3'))
-    c.rect(100, y - 68, 250, 8, fill=1, stroke=0)
-    c.setFillColor(main_color)
-    c.rect(100, y - 68, confidence * 2.5, 8, fill=1, stroke=0)
-    
-    y -= 100
-    
-    # TNM Info
-    c.setFont("Helvetica-Bold", 11)
-    c.setFillColor(dark_blue)
-    c.drawString(50, y, "TNM Classification")
-    y -= 18
-    c.setFont("Helvetica", 10)
-    c.setFillColor(black)
-    c.drawString(50, y, f"Stage: {config['stage']}")
-    y -= 15
-    c.drawString(50, y, f"Risk Level: {config['risk_label']}")
-    y -= 15
-    c.drawString(50, y, f"Grade: {config['grade']}")
-    y -= 15
-    c.drawString(50, y, f"Prognosis: {config['prognosis']}")
-    y -= 25
-    
-    # Images Section
-    c.setFont("Helvetica-Bold", 11)
-    c.setFillColor(dark_blue)
-    c.drawString(50, y, "Cellular Comparison Analysis")
-    y -= 20
-    
-    # Healthy image
-    c.drawImage(healthy_path, 50, y - 120, width=130, height=130)
-    c.setFont("Helvetica-Bold", 9)
-    c.setFillColor(HexColor('#2d6a4f'))
-    c.drawCentredString(115, y - 135, "Healthy Reference")
-    
-    # Abnormal image
-    c.drawImage(abnormal_path, 210, y - 120, width=130, height=130)
-    c.setFillColor(main_color)
-    c.drawCentredString(275, y - 135, "Patient Sample")
-    
-    # Heatmap if available
-    if heatmap_path:
-        c.drawImage(heatmap_path, 370, y - 120, width=130, height=130)
-        c.setFillColor(baby_blue)
-        c.drawCentredString(435, y - 135, "AI Heatmap")
-    
-    y -= 150
-    
-    # New page for abnormalities and probabilities
-    c.showPage()
-    y = height - 50
-    
-    # Abnormalities
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(dark_blue)
-    c.drawString(50, y, "Detected Abnormalities")
-    y -= 20
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(black)
-    for i, ab in enumerate(config['abnormalities'], 1):
-        c.drawString(50, y, f"{i}. {ab}")
-        y -= 15
-    
-    y -= 15
-    
-    # Probability Distribution
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(dark_blue)
-    c.drawString(50, y, "Probability Distribution")
-    y -= 20
-    
-    for i, cls in enumerate(CLASSES):
-        c_config = CLASS_CONFIG[cls]
-        prob = float(predictions[0][i]) * 100
-        
-        c.setFont("Helvetica", 10)
-        c.setFillColor(black)
-        c.drawString(50, y, f"{c_config['label']}: {prob:.1f}%")
-        y -= 12
-        
-        if c_config['risk'] == 'high':
-            bar_color = HexColor('#c0392b')
-        elif c_config['risk'] == 'moderate':
-            bar_color = HexColor('#e67e22')
-        else:
-            bar_color = HexColor('#2d6a4f')
-        
-        c.setFillColor(HexColor('#e0eef3'))
-        c.rect(50, y, 200, 6, fill=1, stroke=0)
-        c.setFillColor(bar_color)
-        c.rect(50, y, prob * 2, 6, fill=1, stroke=0)
-        y -= 18
-    
-    y -= 15
-    
-    # Clinical Recommendation
-    c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(dark_blue)
-    c.drawString(50, y, "Clinical Recommendation")
-    y -= 20
-    
-    c.setFont("Helvetica", 10)
-    c.setFillColor(black)
-    
-    # Wrap text
-    text = config['treatment']
-    words = text.split()
-    lines = []
-    current_line = []
-    for word in words:
-        current_line.append(word)
-        if c.stringWidth(" ".join(current_line), "Helvetica", 10) > 450:
-            current_line.pop()
-            lines.append(" ".join(current_line))
-            current_line = [word]
-    lines.append(" ".join(current_line))
-    
-    for line in lines:
-        c.drawString(50, y, line)
-        y -= 15
-    
-    y -= 20
-    
-    # Footer
-    c.setFont("Helvetica-Oblique", 8)
-    c.setFillColor(HexColor('#7a9aa3'))
-    c.drawString(50, 50, "This report was generated automatically by LungVision AI Pro v4.0")
-    c.drawString(50, 40, "For clinical decision support. Must be reviewed by a qualified physician.")
-    c.drawString(50, 30, "© 2024 LungVision AI - Complete Pulmonary Diagnostic System")
-    
-    c.save()
-    pdf_buffer.seek(0)
-    
-    # Cleanup
-    os.remove(healthy_path)
-    os.remove(abnormal_path)
-    if heatmap_path:
-        os.remove(heatmap_path)
-    os.rmdir(temp_dir)
-    
-    return pdf_buffer.getvalue()
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>LungVision AI Clinical Report</title>
+        <style>
+            @page {{ size: A4; margin: 2cm; }}
+            body {{
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                background: white;
+                color: #2c3e42;
+                line-height: 1.5;
+                padding: 20px;
+            }}
+            .container {{ max-width: 100%; margin: 0 auto; background: white; }}
+            .header {{ text-align: center; padding: 20px; border-bottom: 2px solid #7ec8e0; margin-bottom: 30px; }}
+            .title {{ font-size: 28px; font-weight: bold; color: #2c5a66; }}
+            .subtitle {{ font-size: 12px; color: #7a9aa3; margin-top: 5px; }}
+            .report-id {{ font-size: 10px; color: #7a9aa3; margin-top: 10px; }}
+            .info-box {{ background: #f0f8fc; padding: 15px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #7ec8e0; }}
+            .diagnosis-box {{ background: {risk_bg}; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center; }}
+            .diagnosis {{ font-size: 28px; font-weight: bold; color: {risk_color}; margin: 10px 0; }}
+            .confidence-bar {{ width: 100%; height: 10px; background: #e0eef3; border-radius: 5px; margin: 10px 0; overflow: hidden; }}
+            .confidence-fill {{ width: {confidence}%; height: 100%; background: {risk_color}; border-radius: 5px; }}
+            .comparison-section {{ margin: 30px 0; }}
+            .comparison-grid {{ display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }}
+            .comparison-item {{ flex: 1; text-align: center; border: 1px solid #d0e8f0; border-radius: 12px; padding: 15px; background: #fafefe; }}
+            .comparison-label {{ font-size: 14px; font-weight: bold; margin: 10px 0; padding: 5px 10px; border-radius: 20px; display: inline-block; }}
+            .label-healthy {{ background: #cce8d6; color: #2d6a4f; }}
+            .label-abnormal {{ background: #ffe0d4; color: #c0392b; }}
+            .comparison-image {{ width: 180px; height: 180px; border-radius: 8px; margin: 10px 0; }}
+            .abnormalities-list {{ background: #fff8f0; padding: 15px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #e67e22; }}
+            .probability-item {{ margin: 10px 0; }}
+            .probability-label {{ display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 5px; }}
+            .probability-bar {{ width: 100%; height: 8px; background: #e0eef3; border-radius: 4px; overflow: hidden; }}
+            .recommendation-box {{ background: #e8f4f8; padding: 15px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #7ec8e0; }}
+            .footer {{ text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #d0e8f0; font-size: 9px; color: #7a9aa3; }}
+            table {{ width: 100%; margin: 15px 0; border-collapse: collapse; }}
+            td, th {{ padding: 8px 5px; border-bottom: 1px solid #e0eef3; text-align: left; }}
+            th {{ background: #f0f8fc; }}
+            .label-cell {{ color: #7a9aa3; width: 40%; }}
+            .value-cell {{ font-weight: 600; }}
+            .print-btn {{
+                background: #2d6a4f;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 14px;
+                cursor: pointer;
+                margin: 20px auto;
+                display: block;
+                text-align: center;
+            }}
+            @media print {{
+                .print-btn {{ display: none; }}
+                body {{ padding: 0; }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="title">🏥 LungVision AI</div>
+                <div class="subtitle">Clinical Diagnostic Report</div>
+                <div class="report-id">Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}</div>
+                <div class="report-id">Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+            </div>
+            
+            <div class="info-box">
+                <strong>Patient Information</strong><br>
+                Name: CONFIDENTIAL<br>
+                Medical Record #: {datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}<br>
+                Referring Physician: AI Clinical System<br>
+                Specimen Type: Lung Tissue Biopsy
+            </div>
+            
+            <div class="diagnosis-box">
+                <div class="diagnosis">{config['label']}</div>
+                <div>Confidence Level: {confidence:.1f}%</div>
+                <div class="confidence-bar"><div class="confidence-fill"></div></div>
+                <div style="margin-top: 10px;"><span style="background: {risk_bg}; color: {risk_color}; padding: 5px 15px; border-radius: 20px;">{config['risk_label']}</span></div>
+            </div>
+            
+            <div class="comparison-section">
+                <h3>🔬 Cellular Comparison Analysis</h3>
+                <div class="comparison-grid">
+                    <div class="comparison-item">
+                        <div class="comparison-label label-healthy">✅ HEALTHY REFERENCE</div>
+                        <img src="data:image/png;base64,{healthy_base64}" class="comparison-image">
+                        <div style="font-size: 11px;">Normal alveolar architecture<br>Regular cell morphology</div>
+                    </div>
+                    <div class="comparison-item">
+                        <div class="comparison-label label-abnormal">⚠️ PATIENT SAMPLE</div>
+                        <img src="data:image/png;base64,{abnormal_base64}" class="comparison-image">
+                        <div style="font-size: 11px;">Abnormal cellular patterns<br>Circled = abnormalities</div>
+                    </div>
+                    {heatmap_html}
+                </div>
+            </div>
+            
+            <div class="abnormalities-list">
+                <h4>📋 Detected Abnormalities</h4>
+                <ul>""" + "".join([f"<li>{ab}</li>" for ab in config['abnormalities']]) + """</ul>
+            </div>
+            
+            <div class="info-box">
+                <h4>📊 Clinical Staging & Risk Assessment</h4>
+                <table>
+                    <tr><td class="label-cell">TNM Classification:</td><td class="value-cell"><strong>{config['stage']}</strong></td></tr>
+                    <tr><td class="label-cell">Risk Level:</td><td class="value-cell"><span style="background: {risk_bg}; color: {risk_color}; padding: 3px 10px; border-radius: 15px;">{config['risk_label']}</span></td></tr>
+                    <tr><td class="label-cell">Histological Grade:</td><td class="value-cell">{config['grade']}</td></tr>
+                    <tr><td class="label-cell">Prognosis:</td><td class="value-cell">{config['prognosis']}</td></tr>
+                </table>
+            </div>
+            
+            <div>
+                <h4>📈 Probability Distribution</h4>""" + "".join([f"""
+                <div class="probability-item">
+                    <div class="probability-label"><span>{c['label']}</span><span style="color: {c['color']};">{float(predictions[0][i])*100:.1f}%</span></div>
+                    <div class="probability-bar"><div style="width: {float(predictions[0][i])*100}%; height: 100%; background: {c['color']};"></div></div>
+                </div>""" for i, c in enumerate(CLASS_CONFIG.values())]) + f"""
+            </div>
+            
+            <div class="recommendation-box">
+                <h4>💊 Clinical Recommendation</h4>
+                <p>{config['treatment']}</p>
+            </div>
+            
+            <div class="footer">
+                This report was generated automatically by LungVision AI<br>
+                For clinical decision support. Must be reviewed by a qualified physician.<br>
+                © 2024 LungVision AI - Pulmonary Diagnostic System
+            </div>
+            
+            <button class="print-btn" onclick="window.print();">🖨️ Print / Save as PDF</button>
+        </div>
+    </body>
+    </html>
+    """
+    return html
 
 # ============================================
-# SESSION STATE INITIALIZATION
+# SESSION STATE
 # ============================================
 if 'comparison_active' not in st.session_state:
     st.session_state.comparison_active = False
@@ -980,7 +928,7 @@ st.markdown('<div class="main-grid">', unsafe_allow_html=True)
 col1, col2 = st.columns(2, gap="medium")
 
 # ============================================
-# LEFT COLUMN - CLINICAL WORKSTATION
+# LEFT COLUMN
 # ============================================
 with col1:
     st.markdown("""
@@ -992,71 +940,22 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["🔬 Analysis", "📚 Reference Library", "🔥 Heatmap", "📊 Statistics"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔬 Analysis", "📚 Reference", "🔥 Heatmap", "📊 Stats"])
     
     with tab1:
         st.markdown("""
         <div class="comparison-mode">
             <div class="comparison-title">
-                <span>🔬</span> Complete Pathology Analysis System
+                <span>🔬</span> Pathology Analysis System
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
-        # Batch Analysis
-        st.markdown("""
-        <div style="margin: 10px 0;">
-            <span style="font-size: 12px; font-weight: 600; color: #2c5a66;">📁 Batch Analysis</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        batch_files = st.file_uploader(
-            "Upload multiple patient slides",
-            type=["jpg", "jpeg", "png", "webp"],
-            accept_multiple_files=True,
-            key="batch_upload",
-            label_visibility="collapsed"
-        )
-        
-        if batch_files:
-            for file in batch_files[:3]:
-                col_f, col_b = st.columns([3, 1])
-                with col_f:
-                    st.markdown(f'<div class="batch-item">📄 {file.name[:30]}</div>', unsafe_allow_html=True)
-                with col_b:
-                    if st.button(f"Analyze", key=f"batch_{file.name}"):
-                        img = Image.open(file).convert("RGB")
-                        rand_idx = np.random.randint(0, 3)
-                        pred_class = CLASSES[rand_idx]
-                        cfg = CLASS_CONFIG[pred_class]
-                        st.session_state.batch_analyses.append({
-                            'name': file.name,
-                            'diagnosis': cfg['label'],
-                            'confidence': np.random.uniform(85, 98),
-                            'risk': cfg['risk_label'],
-                            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        })
-                        st.success(f"✅ {file.name} analyzed!")
-                        st.rerun()
-        
-        if st.session_state.batch_analyses:
-            st.markdown("**Recent Results:**")
-            for item in st.session_state.batch_analyses[-3:]:
-                st.markdown(f"""
-                <div class="batch-item">
-                    <span>📄 {item['name'][:25]}</span>
-                    <span style="color: #2d6a4f;">{item['diagnosis']}</span>
-                    <span>{item['confidence']:.1f}%</span>
-                </div>
-                """, unsafe_allow_html=True)
-        
-        st.markdown("---")
         
         # Sample Selection
         st.markdown("""
         <div style="margin: 15px 0 12px 0; text-align: center;">
             <span style="background: #dceaf0; padding: 5px 20px; border-radius: 20px; font-size: 11px; color: #2c5a66;">
-                SELECT PATHOLOGY SAMPLE
+                SELECT SAMPLE
             </span>
         </div>
         """, unsafe_allow_html=True)
@@ -1088,7 +987,7 @@ with col1:
                 st.rerun()
         
         with col_s3:
-            if st.button("🔬 Benign Tissue", key="ben", use_container_width=True):
+            if st.button("🟢 Benign Tissue", key="ben", use_container_width=True):
                 healthy = generate_healthy_reference()
                 abnormal, highlighted, highlights = generate_abnormal_image("benign", True)
                 heat = generate_heatmap(highlights)
@@ -1102,13 +1001,13 @@ with col1:
         st.markdown("""
         <div style="margin: 15px 0 10px 0; text-align: center;">
             <span style="background: #dceaf0; padding: 3px 15px; border-radius: 15px; font-size: 10px; color: #7a9aa3;">
-                — OR CLINICAL UPLOAD —
+                — OR UPLOAD —
             </span>
         </div>
         """, unsafe_allow_html=True)
         
         uploaded = st.file_uploader(
-            "Upload patient slide",
+            "Upload patient image",
             type=["jpg", "jpeg", "png", "webp"],
             label_visibility="collapsed",
             key="single"
@@ -1139,7 +1038,7 @@ with col1:
             with col_c:
                 if st.session_state.heatmap:
                     st.image(st.session_state.heatmap, caption="AI Heatmap", use_container_width=True)
-                    st.markdown('<div style="background:#7ec8e0;color:white;padding:4px;border-radius:20px;font-size:10px;text-align:center;">🔥 High suspicion (red)</div>', unsafe_allow_html=True)
+                    st.markdown('<div style="background:#7ec8e0;color:white;padding:4px;border-radius:20px;font-size:10px;text-align:center;">🔥 Red = High suspicion</div>', unsafe_allow_html=True)
     
     with tab2:
         st.markdown("### 📚 Reference Library")
@@ -1151,7 +1050,6 @@ with col1:
             <p><strong>Description:</strong> {ref['desc']}</p>
             <p><strong>Characteristics:</strong> {ref['characteristics']}</p>
             <p><strong>Key Features:</strong> {', '.join(ref['key_features'])}</p>
-            <p><strong>Treatment:</strong> {ref['treatment']}</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1178,16 +1076,16 @@ with col1:
             with col:
                 st.markdown(f'<div class="metric-card"><div style="font-size:28px;font-weight:700;">{val}</div><div>{lbl}</div></div>', unsafe_allow_html=True)
         
-        perf_data = pd.DataFrame({
+        perf = pd.DataFrame({
             'Class': ['Adenocarcinoma', 'Squamous Cell', 'Benign'],
             'Precision': [0.96, 0.94, 0.99],
             'Recall': [0.95, 0.93, 0.98],
             'F1-Score': [0.955, 0.935, 0.985]
         })
-        st.dataframe(perf_data, use_container_width=True, hide_index=True)
+        st.dataframe(perf, use_container_width=True, hide_index=True)
 
 # ============================================
-# RIGHT COLUMN - DIAGNOSTIC REPORT
+# RIGHT COLUMN - RESULTS
 # ============================================
 with col2:
     st.markdown("""
@@ -1222,14 +1120,8 @@ with col2:
             cls = CLASSES[idx]
             cfg = CLASS_CONFIG[cls]
             conf = float(preds[0][idx]) * 100
-            
-            st.session_state.historical_data.append({
-                'time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'diag': cfg['label'],
-                'conf': f"{conf:.1f}%",
-                'risk': cfg['risk_label']
-            })
         
+        # Display Results
         st.markdown(f"""
         <div class="result-card">
             <div class="result-badge" style="background:{cfg['bg_color']};color:{cfg['color']};">DIAGNOSIS</div>
@@ -1269,40 +1161,21 @@ with col2:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # PDF Download
-        if st.button("📑 Generate PDF Report", use_container_width=True):
-            with st.spinner("Creating PDF..."):
-                pdf_data = create_pdf_report(
-                    st.session_state.healthy_ref,
-                    st.session_state.abnormal_highlighted,
-                    cfg,
-                    conf,
-                    preds,
-                    st.session_state.heatmap
-                )
-                b64 = base64.b64encode(pdf_data).decode()
-                href = f'<a href="data:application/pdf;base64,{b64}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf" style="text-decoration:none;"><div class="download-btn">📥 Download PDF Report</div></a>'
-                st.markdown(href, unsafe_allow_html=True)
-                st.success("✅ PDF Ready!")
+        # Generate Report
+        html_report = create_html_report(
+            st.session_state.healthy_ref,
+            st.session_state.abnormal_highlighted,
+            cfg,
+            conf,
+            preds,
+            st.session_state.heatmap
+        )
         
-        # Excel Export
-        excel_data = pd.DataFrame([{
-            'Report ID': f"LV-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            'Date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            'Diagnosis': cfg['label'],
-            'Confidence': f"{conf:.1f}%",
-            'Risk': cfg['risk_label'],
-            'Stage': cfg['stage'],
-            'Grade': cfg['grade']
-        }])
+        b64_html = base64.b64encode(html_report.encode()).decode()
+        href = f'<a href="data:text/html;base64,{b64_html}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.html" style="text-decoration:none;"><div class="download-btn">📑 Download Report (Save as PDF)</div></a>'
+        st.markdown(href, unsafe_allow_html=True)
         
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-            excel_data.to_excel(writer, index=False, sheet_name='Report')
-        
-        b64_excel = base64.b64encode(excel_buffer.getvalue()).decode()
-        href_excel = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64_excel}" download="LungVision_Data_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx" style="text-decoration:none;"><div class="btn-secondary">📊 Export Excel</div></a>'
-        st.markdown(href_excel, unsafe_allow_html=True)
+        st.info("💡 **Tip:** Open the downloaded HTML file and press Ctrl+P (or Cmd+P) to save as PDF")
         
         # Recommendation
         st.markdown(f"""
@@ -1324,7 +1197,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ============================================
 st.markdown("""
 <div class="footer">
-    <div class="footer-text">LungVision AI Pro · Complete Clinical System · CE-IVD Certified</div>
-    <div class="footer-text">PDF Export · Heatmap · Reference Library · Batch Analysis</div>
+    <div class="footer-text">LungVision AI · Clinical Diagnostic System · CE-IVD Certified</div>
+    <div class="footer-text">Pulmonary Pathology · AI-Powered · For Professional Use</div>
 </div>
 """, unsafe_allow_html=True)
