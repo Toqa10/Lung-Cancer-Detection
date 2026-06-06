@@ -7,6 +7,13 @@ import os
 from datetime import datetime
 import json
 import random
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm, cm
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
+import tempfile
 
 st.set_page_config(
     page_title="LungVision AI - Clinical Diagnostic System",
@@ -378,7 +385,7 @@ h1 span {
     font-weight: 700;
 }
 
-.download-btn, .print-btn {
+.download-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -396,7 +403,7 @@ h1 span {
     text-decoration: none;
 }
 
-.download-btn:hover, .print-btn:hover {
+.download-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(45, 106, 79, 0.3);
 }
@@ -428,16 +435,6 @@ h1 span {
     font-size: 10px;
     color: #7a9aa3;
     letter-spacing: 0.05em;
-}
-
-@media print {
-    .stApp, .hero, .footer, .stButton, .panel-header, .download-btn, .print-btn {
-        display: none !important;
-    }
-    .main-grid, .panel, .result-card, .clinical-card {
-        display: block !important;
-        background: white !important;
-    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -591,323 +588,224 @@ def generate_abnormal_image(case_type, highlight_regions=True):
     
     return img, highlighted_img
 
-def create_html_report(healthy_img, abnormal_img, config, confidence, predictions):
-    """Create HTML report"""
+def create_pdf_report(healthy_img, abnormal_img, config, confidence, predictions):
+    """Create professional PDF report"""
     
-    # Convert images to base64
-    healthy_buffer = io.BytesIO()
-    healthy_img.save(healthy_buffer, format='PNG')
-    healthy_base64 = base64.b64encode(healthy_buffer.getvalue()).decode()
+    # Create temporary directory for images
+    temp_dir = tempfile.mkdtemp()
+    healthy_path = os.path.join(temp_dir, 'healthy.png')
+    abnormal_path = os.path.join(temp_dir, 'abnormal.png')
     
-    abnormal_buffer = io.BytesIO()
-    abnormal_img.save(abnormal_buffer, format='PNG')
-    abnormal_base64 = base64.b64encode(abnormal_buffer.getvalue()).decode()
+    # Resize and save images
+    healthy_resized = healthy_img.resize((150, 150))
+    abnormal_resized = abnormal_img.resize((150, 150))
+    healthy_resized.save(healthy_path)
+    abnormal_resized.save(abnormal_path)
     
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>LungVision AI Clinical Report</title>
-        <style>
-            @page {{
-                size: A4;
-                margin: 2cm;
-            }}
-            body {{
-                font-family: 'Helvetica', 'Arial', sans-serif;
-                background: white;
-                color: #2c3e42;
-                line-height: 1.5;
-                padding: 20px;
-            }}
-            .container {{
-                max-width: 1000px;
-                margin: 0 auto;
-                background: white;
-            }}
-            .header {{
-                text-align: center;
-                padding: 20px;
-                border-bottom: 2px solid #7ec8e0;
-                margin-bottom: 30px;
-            }}
-            .title {{
-                font-size: 28px;
-                font-weight: bold;
-                color: #2c5a66;
-            }}
-            .subtitle {{
-                font-size: 12px;
-                color: #7a9aa3;
-                margin-top: 5px;
-            }}
-            .report-id {{
-                font-size: 10px;
-                color: #7a9aa3;
-                margin-top: 10px;
-            }}
-            .info-box {{
-                background: #f0f8fc;
-                padding: 15px;
-                border-radius: 12px;
-                margin: 20px 0;
-                border-left: 4px solid #7ec8e0;
-            }}
-            .diagnosis-box {{
-                background: {config['bg_color']};
-                padding: 20px;
-                border-radius: 12px;
-                margin: 20px 0;
-                text-align: center;
-            }}
-            .diagnosis {{
-                font-size: 28px;
-                font-weight: bold;
-                color: {config['color']};
-                margin: 10px 0;
-            }}
-            .confidence-bar {{
-                width: 100%;
-                height: 10px;
-                background: #e0eef3;
-                border-radius: 5px;
-                margin: 10px 0;
-                overflow: hidden;
-            }}
-            .confidence-fill {{
-                width: {confidence}%;
-                height: 100%;
-                background: {config['color']};
-                border-radius: 5px;
-            }}
-            .comparison-section {{
-                margin: 30px 0;
-            }}
-            .comparison-grid {{
-                display: flex;
-                gap: 20px;
-                margin: 20px 0;
-            }}
-            .comparison-item {{
-                flex: 1;
-                text-align: center;
-                border: 1px solid #d0e8f0;
-                border-radius: 12px;
-                padding: 15px;
-                background: #fafefe;
-            }}
-            .comparison-label {{
-                font-size: 14px;
-                font-weight: bold;
-                margin: 10px 0;
-                padding: 5px 10px;
-                border-radius: 20px;
-                display: inline-block;
-            }}
-            .label-healthy {{
-                background: #cce8d6;
-                color: #2d6a4f;
-            }}
-            .label-abnormal {{
-                background: #ffe0d4;
-                color: #c0392b;
-            }}
-            .comparison-image {{
-                width: 200px;
-                height: 200px;
-                border-radius: 8px;
-                margin: 10px 0;
-            }}
-            .abnormalities-list {{
-                background: #fff8f0;
-                padding: 15px;
-                border-radius: 12px;
-                margin: 20px 0;
-                border-left: 4px solid #e67e22;
-            }}
-            .probability-item {{
-                margin: 10px 0;
-            }}
-            .probability-label {{
-                display: flex;
-                justify-content: space-between;
-                font-size: 12px;
-                margin-bottom: 5px;
-            }}
-            .probability-bar {{
-                width: 100%;
-                height: 8px;
-                background: #e0eef3;
-                border-radius: 4px;
-                overflow: hidden;
-            }}
-            .recommendation-box {{
-                background: #e8f4f8;
-                padding: 15px;
-                border-radius: 12px;
-                margin: 20px 0;
-                border-left: 4px solid #7ec8e0;
-            }}
-            .footer {{
-                text-align: center;
-                margin-top: 40px;
-                padding-top: 20px;
-                border-top: 1px solid #d0e8f0;
-                font-size: 9px;
-                color: #7a9aa3;
-            }}
-            table {{
-                width: 100%;
-                margin: 15px 0;
-            }}
-            td {{
-                padding: 8px 0;
-                border-bottom: 1px solid #e0eef3;
-            }}
-            .label-cell {{
-                color: #7a9aa3;
-                width: 40%;
-            }}
-            .value-cell {{
-                font-weight: 600;
-            }}
-            .risk-tag {{
-                display: inline-block;
-                padding: 3px 10px;
-                border-radius: 15px;
-                font-size: 10px;
-                font-weight: bold;
-            }}
-            .risk-high {{ background: #ffe0d4; color: #c0392b; }}
-            .risk-moderate {{ background: #fff0d4; color: #e67e22; }}
-            .risk-low {{ background: #cce8d6; color: #2d6a4f; }}
-            
-            @media print {{
-                body {{
-                    padding: 0;
-                }}
-                .no-print {{
-                    display: none;
-                }}
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="title">🏥 LungVision AI</div>
-                <div class="subtitle">Clinical Diagnostic Report | Advanced Pulmonary Pathology System</div>
-                <div class="report-id">Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}</div>
-                <div class="report-id">Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
-            </div>
-            
-            <div class="info-box">
-                <strong>Patient Information</strong><br>
-                Name: CONFIDENTIAL<br>
-                Medical Record #: {datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}<br>
-                Referring Physician: AI Clinical System<br>
-                Specimen Type: Lung Tissue Biopsy
-            </div>
-            
-            <div class="diagnosis-box">
-                <div class="diagnosis">{config['label']}</div>
-                <div>Confidence Level: {confidence:.1f}%</div>
-                <div class="confidence-bar">
-                    <div class="confidence-fill"></div>
-                </div>
-                <div style="margin-top: 10px;">
-                    <span class="risk-tag risk-{config['risk']}">{config['risk_label']}</span>
-                </div>
-            </div>
-            
-            <div class="comparison-section">
-                <h3>🔬 Cellular Comparison Analysis</h3>
-                <div class="comparison-grid">
-                    <div class="comparison-item">
-                        <div class="comparison-label label-healthy">✅ HEALTHY REFERENCE</div>
-                        <img src="data:image/png;base64,{healthy_base64}" class="comparison-image" alt="Healthy Tissue">
-                        <div style="font-size: 11px; color: #7a9aa3; margin-top: 10px;">
-                            Normal alveolar architecture<br>
-                            Regular cell morphology
-                        </div>
-                    </div>
-                    <div class="comparison-item">
-                        <div class="comparison-label label-abnormal">⚠️ PATIENT SAMPLE</div>
-                        <img src="data:image/png;base64,{abnormal_base64}" class="comparison-image" alt="Patient Sample">
-                        <div style="font-size: 11px; color: #7a9aa3; margin-top: 10px;">
-                            Abnormal cellular patterns<br>
-                            Highlighted regions indicate abnormalities
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="abnormalities-list">
-                <h4>📋 Detected Abnormalities</h4>
-                <ul style="margin: 10px 0; padding-left: 20px;">
-    """
+    # Create PDF
+    pdf_buffer = io.BytesIO()
+    c = canvas.Canvas(pdf_buffer, pagesize=A4)
+    width, height = A4
     
-    for ab in config['abnormalities']:
-        html += f"<li>{ab}</li>"
+    # Colors
+    primary_blue = (44/255, 90/255, 102/255)
+    baby_blue = (126/255, 200/255, 224/255)
     
-    html += f"""
-                </ul>
-            </div>
-            
-            <div class="info-box">
-                <h4>📊 Clinical Staging & Risk Assessment</h4>
-                <table>
-                    <tr><td class="label-cell">TNM Classification:</td><td class="value-cell"><strong>{config['stage']}</strong></td></tr>
-                    <tr><td class="label-cell">Risk Level:</td><td class="value-cell"><span class="risk-tag risk-{config['risk']}">{config['risk_label']}</span></td></tr>
-                    <tr><td class="label-cell">Pathological Finding:</td><td class="value-cell">{config['desc']}</td></tr>
-                </table>
-            </div>
-            
-            <div>
-                <h4>📈 Probability Distribution</h4>
-    """
+    # Header
+    c.setFont("Helvetica-Bold", 20)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, height - 50, "LungVision AI")
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.drawString(50, height - 70, "Clinical Diagnostic Report")
+    
+    # Report ID and Date
+    c.setFont("Helvetica", 9)
+    c.drawString(50, height - 90, f"Report ID: LV-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+    c.drawString(50, height - 105, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Line separator
+    c.setStrokeColorRGB(baby_blue[0], baby_blue[1], baby_blue[2])
+    c.setLineWidth(2)
+    c.line(50, height - 115, width - 50, height - 115)
+    
+    y_position = height - 145
+    
+    # Patient Information
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, y_position, "Patient Information")
+    y_position -= 20
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0, 0, 0)
+    c.drawString(50, y_position, "Patient Name: CONFIDENTIAL")
+    y_position -= 15
+    c.drawString(50, y_position, f"Medical Record #: {datetime.now().strftime('%Y')}-{np.random.randint(1000, 9999)}")
+    y_position -= 15
+    c.drawString(50, y_position, "Referring Physician: AI Clinical System")
+    y_position -= 15
+    c.drawString(50, y_position, "Specimen Type: Lung Tissue Biopsy")
+    y_position -= 25
+    
+    # Diagnosis
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, y_position, "Diagnostic Findings")
+    y_position -= 20
+    
+    # Diagnosis with color based on risk
+    if config['risk'] == 'high':
+        c.setFillColorRGB(192/255, 57/255, 43/255)
+    elif config['risk'] == 'moderate':
+        c.setFillColorRGB(230/255, 126/255, 34/255)
+    else:
+        c.setFillColorRGB(45/255, 106/255, 79/255)
+    
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, y_position, config['label'])
+    y_position -= 20
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0, 0, 0)
+    c.drawString(50, y_position, f"Confidence Level: {confidence:.1f}%")
+    y_position -= 15
+    
+    # Confidence bar
+    c.setFillColorRGB(0.9, 0.9, 0.9)
+    c.rect(50, y_position - 5, 150, 8, fill=1)
+    if config['risk'] == 'high':
+        c.setFillColorRGB(192/255, 57/255, 43/255)
+    elif config['risk'] == 'moderate':
+        c.setFillColorRGB(230/255, 126/255, 34/255)
+    else:
+        c.setFillColorRGB(45/255, 106/255, 79/255)
+    c.rect(50, y_position - 5, confidence * 1.5, 8, fill=1)
+    y_position -= 25
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0, 0, 0)
+    c.drawString(50, y_position, f"TNM Classification: {config['stage']}")
+    y_position -= 15
+    c.drawString(50, y_position, f"Risk Level: {config['risk_label']}")
+    y_position -= 15
+    c.drawString(50, y_position, f"Pathological Finding: {config['desc']}")
+    y_position -= 30
+    
+    # Cellular Comparison
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, y_position, "Cellular Comparison Analysis")
+    y_position -= 20
+    
+    # Add images
+    c.drawImage(healthy_path, 50, y_position - 150, width=140, height=140)
+    c.drawImage(abnormal_path, 200, y_position - 150, width=140, height=140)
+    
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColorRGB(45/255, 106/255, 79/255)
+    c.drawString(95, y_position - 160, "Healthy Reference")
+    c.setFillColorRGB(192/255, 57/255, 43/255)
+    c.drawString(245, y_position - 160, "Patient Sample")
+    
+    y_position -= 180
+    
+    # Abnormalities
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, y_position, "Detected Abnormalities")
+    y_position -= 18
+    
+    c.setFont("Helvetica", 9)
+    c.setFillColorRGB(0, 0, 0)
+    for i, ab in enumerate(config['abnormalities'], 1):
+        c.drawString(50, y_position, f"{i}. {ab}")
+        y_position -= 12
+    
+    y_position -= 10
+    
+    # New page for probability and recommendation
+    c.showPage()
+    y_position = height - 50
+    
+    # Probability Distribution
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, y_position, "Probability Distribution")
+    y_position -= 20
     
     for i, cls in enumerate(CLASSES):
-        c = CLASS_CONFIG[cls]
+        c_config = CLASS_CONFIG[cls]
         prob = float(predictions[0][i]) * 100
-        html += f"""
-                <div class="probability-item">
-                    <div class="probability-label">
-                        <span>{c['label']}</span>
-                        <span style="color: {c['color']};">{prob:.1f}%</span>
-                    </div>
-                    <div class="probability-bar">
-                        <div style="width: {prob}%; height: 100%; background: {c['color']};"></div>
-                    </div>
-                </div>
-        """
-    
-    html += f"""
-            </div>
-            
-            <div class="recommendation-box">
-                <h4>💊 Clinical Recommendation</h4>
-                <p>{config['treatment']}</p>
-            </div>
-            
-            <div class="footer">
-                This report was generated automatically by LungVision AI v3.0<br>
-                For clinical decision support. Must be reviewed by a qualified physician.<br>
-                © 2024 LungVision AI - Advanced Pulmonary Diagnostic System
-            </div>
-        </div>
         
-        <div class="no-print" style="text-align: center; margin-top: 20px; padding: 10px;">
-            <button onclick="window.print();" style="background: #2d6a4f; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 14px;">
-                🖨️ Print / Save as PDF
-            </button>
-        </div>
-    </body>
-    </html>
-    """
+        c.setFont("Helvetica", 10)
+        c.setFillColorRGB(0, 0, 0)
+        c.drawString(50, y_position, f"{c_config['label']}: {prob:.1f}%")
+        y_position -= 12
+        
+        # Progress bar
+        c.setFillColorRGB(0.9, 0.9, 0.9)
+        c.rect(50, y_position, 200, 6, fill=1)
+        if c_config['risk'] == 'high':
+            c.setFillColorRGB(192/255, 57/255, 43/255)
+        elif c_config['risk'] == 'moderate':
+            c.setFillColorRGB(230/255, 126/255, 34/255)
+        else:
+            c.setFillColorRGB(45/255, 106/255, 79/255)
+        c.rect(50, y_position, prob * 2, 6, fill=1)
+        y_position -= 18
     
-    return html
+    y_position -= 10
+    
+    # Clinical Recommendation
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColorRGB(primary_blue[0], primary_blue[1], primary_blue[2])
+    c.drawString(50, y_position, "Clinical Recommendation")
+    y_position -= 20
+    
+    c.setFont("Helvetica", 10)
+    c.setFillColorRGB(0, 0, 0)
+    
+    # Wrap text for recommendation
+    text = config['treatment']
+    max_width = 450
+    words = text.split()
+    lines = []
+    current_line = []
+    
+    for word in words:
+        current_line.append(word)
+        line_width = c.stringWidth(" ".join(current_line), "Helvetica", 10)
+        if line_width > max_width:
+            current_line.pop()
+            lines.append(" ".join(current_line))
+            current_line = [word]
+    lines.append(" ".join(current_line))
+    
+    for line in lines:
+        c.drawString(50, y_position, line)
+        y_position -= 15
+    
+    y_position -= 15
+    
+    # Footer
+    c.setFont("Helvetica-Oblique", 8)
+    c.setFillColorRGB(0.5, 0.5, 0.5)
+    c.drawString(50, 50, "This report was generated automatically by LungVision AI v3.0")
+    c.drawString(50, 40, "For clinical decision support. Must be reviewed by a qualified physician.")
+    c.drawString(50, 30, "© 2024 LungVision AI - Advanced Pulmonary Diagnostic System")
+    
+    # Save PDF
+    c.save()
+    pdf_buffer.seek(0)
+    
+    # Cleanup
+    os.remove(healthy_path)
+    os.remove(abnormal_path)
+    os.rmdir(temp_dir)
+    
+    return pdf_buffer.getvalue()
 
 # Initialize session state
 if 'comparison_active' not in st.session_state:
@@ -1101,20 +999,20 @@ with col2:
         
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Generate HTML Report
-        html_report = create_html_report(
-            st.session_state.healthy_ref,
-            st.session_state.abnormal_highlighted,
-            config,
-            confidence,
-            predictions
-        )
-        
-        b64_html = base64.b64encode(html_report.encode()).decode()
-        href = f'<a href="data:text/html;base64,{b64_html}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.html" style="text-decoration: none;"><div class="download-btn">📑 Download Report (HTML)</div></a>'
-        st.markdown(href, unsafe_allow_html=True)
-        
-        st.info("💡 **Tip:** Open the HTML file and press Ctrl+P (or Cmd+P) to save as PDF")
+        # Generate PDF Report
+        if st.button("📑 Generate PDF Clinical Report", use_container_width=True):
+            with st.spinner("Generating PDF report..."):
+                pdf_data = create_pdf_report(
+                    st.session_state.healthy_ref,
+                    st.session_state.abnormal_highlighted,
+                    config,
+                    confidence,
+                    predictions
+                )
+                b64_pdf = base64.b64encode(pdf_data).decode()
+                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="LungVision_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf" style="text-decoration: none;"><div class="download-btn">📥 Download PDF Report</div></a>'
+                st.markdown(href, unsafe_allow_html=True)
+                st.success("✅ PDF Report generated successfully!")
         
         st.markdown(f"""
         <div class="clinical-card">
